@@ -1,0 +1,13 @@
+.reference-header { display: flex; align-items: center; gap: 24px; padding: 16px 24px; border-bottom: 1px solid var(--border); }
+.reference-header .brand { margin-right: auto; }
+.code-reference main { margin: 0 auto; padding: 48px 24px; max-width: 1100px; }
+.code-reference article { max-width: none; }
+.reference-eyebrow { color: var(--accent); font-size: 12px; letter-spacing: 2px; }
+.reference-filters { display: flex; gap: 16px; margin-top: 28px; }
+.reference-filters label { display: grid; gap: 8px; flex: 1; color: var(--text-2); font-size: 14px; }
+.reference-filters input, .reference-filters select { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-subtle); color: var(--text); font: inherit; }
+.reference-filters input:focus-visible, .reference-filters select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.code-reference td:first-child { white-space: nowrap; }
+.source-hash { overflow-wrap: anywhere; }
+.code-reference details { margin: 24px 0; padding: 16px; border: 1px solid var(--border); border-radius: 12px; }
+@media (max-width: 600px) { .reference-filters { flex-direction: column; } .reference-header { gap: 12px; padding: 12px; flex-wrap: wrap; } .code-reference main { padding: 28px 16px; } }

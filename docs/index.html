@@ -309,6 +309,7 @@
             <a href="#commands"><svg class="ico" aria-hidden="true">
                     <use href="#i-terminal" />
                 </svg><span>Command reference</span></a>
+            <a href="response-codes.html"><svg class="ico" aria-hidden="true"><use href="#i-info" /></svg><span>Response codes</span></a>
             <a href="#protocol"><svg class="ico" aria-hidden="true">
                     <use href="#i-globe" />
                 </svg><span>API and request design</span></a>
@@ -350,7 +351,8 @@
                             with an SMS one-time password.</span></span></a>
                 <a class="card" href="#plans"><span class="icon-tile"><svg class="ico" aria-hidden="true">
                             <use href="#i-tag" />
-                        </svg></span><span><span class="card-title">Plans and categories</span><span class="card-text">Browse
+                        </svg></span><span><span class="card-title">Plans and categories</span><span
+                            class="card-text">Browse
                             catalogs and find the right pack.</span></span></a>
                 <a class="card" href="#subscribe"><span class="icon-tile"><svg class="ico" aria-hidden="true">
                             <use href="#i-credit-card" />
@@ -480,7 +482,7 @@ ncell plans --category 66 --json</code></pre>
                     <thead>
                         <tr>
                             <th>Category</th>
-                            <th>Catalog</th>
+                            <th>Type</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -504,13 +506,6 @@ ncell plans --category 66 --json</code></pre>
             <pre data-lang="Shell"><code>ncell search "SMS" --category 50
 ncell search "Super" --sort price
 ncell plans --search "Combo" --sort validity:desc,price:asc</code></pre>
-            <p>
-                Search sends the keyword to Ncell's catalog endpoint. It is
-                server-side and scoped to the selected category, not a local text
-                filter or an all-catalog search. Omitting
-                <code>--category</code> searches category 66. An empty keyword is
-                rejected; no matches produce an empty catalog.
-            </p>
 
             <h3 id="searching-sort">Sort by more than one field</h3>
             <pre data-lang="Shell"><code>ncell search "SMS" --category 50 --sort validity:desc,price:asc
@@ -519,41 +514,16 @@ ncell plans --sort validity,price</code></pre>
             <p>
                 Supported fields are <code>price</code> and
                 <code>validity</code>. Directions are <code>asc</code> and
-                <code>desc</code>; omitted directions mean ascending. The
-                default is ascending price.
-            </p>
-            <p>
-                Keys are applied left to right:
-                <code>validity:desc,price:asc</code> means longest validity
-                first, then lowest price among plans with equal validity.
-                Repeated <code>--sort</code> flags and comma-separated keys
-                are equivalent. Sorting runs locally after the server
-                response and applies to JSON too. Durations in minutes,
-                hours, days and weeks are compared on a common scale.
+                <code>desc</code>; default is <code>asc</code>.
             </p>
 
             <h2 id="subscribe">Subscribe to a plan</h2>
             <pre data-lang="Shell"><code>ncell plans --category 50
 ncell subscribe --category 50 --id 984</code></pre>
             <p>
-                Use the plan ID from the catalog and the same category that
-                listed it. <code>--id</code> is required;
-                <code>--category</code> defaults to 66. A category ID is not a plan
-                ID.
+                Use the plan ID from the category list. <code>--id</code> is required;
+                <code>--category</code> defaults to 66.
             </p>
-            <div class="callout callout-warning" role="note">
-                <svg class="ico" aria-hidden="true">
-                    <use href="#i-triangle-alert" />
-                </svg>
-                <div>
-                    <p class="callout-title">Warning</p>
-                    <p>
-                        This command submits a subscription request
-                        immediately. Paid packs charge your Ncell balance.
-                        Check the current catalog and price first.
-                    </p>
-                </div>
-            </div>
             <p>
                 The CLI fetches current plan metadata, including
                 subscription code, name and price, then submits the
