@@ -173,8 +173,6 @@ h2:hover .anchor, h3:hover .anchor, .anchor:focus-visible { opacity: 1; }
 .caption { margin: -4px 0 20px; color: var(--muted); font-size: 14px; }
 
 /* Page intro */
-.badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; padding: 0; list-style: none; }
-.badges li { margin: 0; padding: 2px 12px; background: var(--bg-muted); border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 40px; }
 .btn {
   display: inline-flex; align-items: center; gap: 8px;
@@ -347,7 +345,6 @@ li[aria-selected="true"] .result-icon { background: var(--bg); color: var(--acce
 .card { transition: border-color .18s, box-shadow .18s, transform .18s; }
 h2 { padding-top: 30px; border-top: 1px solid var(--border); }
 .features { padding: 6px 0; }
-.badges li { border: 1px solid var(--border); }
 .btn-primary { box-shadow: 0 4px 12px #702da01a; }
 .header-actions { padding-left: 12px; border-left: 1px solid var(--border); }
 .attribution { flex-basis: 100%; margin: 8px 0 0!important; color: var(--muted); font-size: 12px; }
