@@ -2,9 +2,9 @@
 
 ![ncell-cli](assets/banner.svg)
 
-OTP login · balances · plans · subscriptions · free SMS
-
-![Rust](https://img.shields.io/badge/Written_in-Rust-702DA0?style=flat-square&logo=rust&logoColor=white)
+<img alt="Written in Rust" src="https://img.shields.io/badge/Written_in-Rust-702DA0?style=for-the-badge&logo=rust&logoColor=white">
+<img alt="ncell-cli v0.1.0" src="https://img.shields.io/badge/ncell--cli-v0.1.0-702DA0?style=for-the-badge&logo=rust&logoColor=white">
+<img alt="MIT licensed" src="https://img.shields.io/badge/license-MIT-1F9D55?style=for-the-badge">
 
 **[Read the documentation →](https://rohityadav-sas.github.io/ncell-cli/)**
 
@@ -16,6 +16,7 @@ OTP login · balances · plans · subscriptions · free SMS
 ncell search "SMS" --category 50 --sort price
 ```
 
+### Output
 ```text
 ID      Plan                             Price    Validity
 --------------------------------------------------------------
@@ -61,11 +62,3 @@ ncell --help
 **Prebuilt Windows executable**
 
 Download the [Windows x86_64 release](https://github.com/rohityadav-sas/ncell-cli/releases/latest), extract the ZIP, and run `.\ncell.exe --help` from the extracted directory. Add that directory to your `PATH` to run it anywhere.
-
----
-
-<div align="center">
-
-ncell-cli v0.1.0 · MIT licensed
-
-</div>
