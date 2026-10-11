@@ -1,6 +1,10 @@
 #content > h2:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.code-section + .code-section { margin-top: 32px; }
+.code-heading { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.code-heading h3 { margin: 0; font-size: 17px; }
+.code-heading span { color: var(--muted); font-size: 12px; }
+.code-section .table-wrap { margin: 0; }
+#code-rows th:first-child { width: 130px; }
 #code-rows td:first-child { white-space: nowrap; }
 #code-rows tr[data-prefix] { scroll-margin-top: calc(var(--header-h) + 24px); }
 #code-rows tr:target td { background: var(--accent-tint); }
-.code-group th { background: var(--accent-tint); color: var(--accent); letter-spacing: .04em; }
-.code-group th span { float: right; color: var(--muted); font-size: 12px; font-weight: 400; letter-spacing: normal; }

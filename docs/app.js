@@ -76,7 +76,7 @@
         if (el.tagName !== 'H3') section = title;
         entry = { id: el.id, url: page + '#' + el.id, title, section, text: '' };
         index.push(entry);
-      } else if (entry && !el.querySelector('#code-rows')) entry.text += ' ' + el.textContent;
+      } else if (entry && el.id !== 'code-rows' && !el.querySelector('#code-rows')) entry.text += ' ' + el.textContent;
     }
     for (const row of content.querySelectorAll('#code-rows tr[data-prefix]')) {
       const code = row.cells[0].textContent.trim();
