@@ -8,6 +8,7 @@ pub struct Client {
     http: reqwest::blocking::Client,
     base_url: String,
 }
+
 impl Client {
     pub fn new() -> Result<Self> {
         Self::with_base_url(BASE_URL)
@@ -55,9 +56,11 @@ impl Client {
         if !status.is_success() || (!subscription_success && code != "200" && code != 200) {
             // Only expose short alphanumeric codes, never arbitrary server text or tokens.
             let detail = header["responseDescDisplay"].as_str().filter(|s| {
-                s.len() == 7
-                    && s.as_bytes()[..3].iter().all(u8::is_ascii_uppercase)
-                    && s.as_bytes()[3..].iter().all(u8::is_ascii_digit)
+                (6..=12).contains(&s.len()) && {
+                    let (prefix, digits) = s.as_bytes().split_at(s.len() - 4);
+                    prefix.iter().all(u8::is_ascii_uppercase)
+                        && digits.iter().all(u8::is_ascii_digit)
+                }
             });
             let code = detail
                 .map(str::to_owned)
@@ -75,5 +78,34 @@ impl Client {
             });
         }
         Ok(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn response_codes_with_short_and_long_prefixes_keep_their_meanings() {
+        let mut server = mockito::Server::new();
+        let client = Client::with_base_url(&server.url()).unwrap();
+        for (code, meaning) in [("CL3001", "Loan request failed"), ("BSAM5001", "Try again")] {
+            let request = server
+                .mock("POST", "/test")
+                .with_status(400)
+                .with_body(
+                    serde_json::json!({"responseHeader": {
+                        "responseCode": "08", "responseDescDisplay": code
+                    }})
+                    .to_string(),
+                )
+                .create();
+            let error = client
+                .post("/test", &serde_json::json!({}), None)
+                .unwrap_err();
+            assert!(error.to_string().contains(code));
+            assert!(error.to_string().contains(meaning));
+            request.assert();
+        }
     }
 }

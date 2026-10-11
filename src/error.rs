@@ -47,23 +47,27 @@ impl Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 fn api_error_detail(code: &str) -> &'static str {
-    match code {
-        "LGN2000" => ": Mobile number is missing",
-        "LGN2001" => ": Access token has expired",
-        "LGN2002" => ": Authentication token was not supplied",
-        "LGN2003" => ": Authentication error; exact meaning is unconfirmed",
-        "LGN2004" => ": Refresh token is invalid or the device ID does not match",
-        "LGN2005" => ": Number change is not allowed",
-        "LGN2007" => ": Invalid mobile number",
-        "LGN2009" => ": Request validation failed; a required field may be missing",
-        "LGN3000" => ": Unable to process the request; try again later",
-        _ => "",
-    }
+    include!("response_codes.rs")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn app_codes_have_meanings_without_exposing_server_data() {
+        for (code, expected) in [
+            ("BIL2007", "insufficient"),
+            ("OTP2006", "Expired"),
+            ("SMS2000", "failed"),
+            ("CL3001", "Loan"),
+            ("BSAM5001", "Try again"),
+        ] {
+            assert!(api_error_detail(code).contains(expected));
+        }
+        assert!(api_error_detail("DVS2008").contains("unconfirmed"));
+        assert!(api_error_detail("BIL1000").contains("Subscription success"));
+    }
 
     #[test]
     fn authentication_errors_have_safe_labels_and_preserve_codes() {
@@ -81,7 +85,7 @@ mod tests {
             assert!(!api_error_detail(code).is_empty());
             assert!(!message.contains("secret"));
         }
-        assert_eq!(api_error_detail("NEW9999"), "");
+        assert!(api_error_detail("NEW9999").contains("unavailable"));
         assert!(api_error_detail("LGN2003").contains("unconfirmed"));
     }
 }

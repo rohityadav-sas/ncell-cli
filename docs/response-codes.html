@@ -1,21 +1,333 @@
 <!doctype html>
 <html lang="en">
+
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Response codes · ncell-cli</title>
-<meta name="description" content="Search Ncell app response codes and their source-defined meanings.">
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="response-codes.css">
-<script src="response-codes.js" defer></script>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Response codes · ncell-cli</title>
+    <meta name="description"
+        content="Documentation for ncell-cli: install, sign in, query balances, search plans, subscribe and automate with JSON." />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#100e15" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <script>
+        (function () {
+            var theme;
+            try {
+                theme = localStorage.getItem("ncell-docs-theme");
+            } catch (e) { }
+            if (theme !== "light" && theme !== "dark") {
+                theme = matchMedia("(prefers-color-scheme: dark)").matches
+                    ? "dark"
+                    : "light";
+            }
+            document.documentElement.dataset.theme = theme;
+        })();
+    </script>
+    <noscript>
+        <style>
+            .search-btn,
+            .menu-btn,
+            .theme-btn,
+            .copy-btn {
+                display: none !important;
+            }
+
+            @media (max-width: 900px) {
+                #sidebar {
+                    display: block;
+                    position: static;
+                    width: auto;
+                    max-width: none;
+                    border: 0;
+                    box-shadow: none;
+                }
+
+                main {
+                    padding-top: 16px;
+                }
+            }
+        </style>
+    </noscript>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="response-codes.css" />
 </head>
-<body class="code-reference">
-<header class="reference-header"><a class="brand" href="index.html">ncell-cli</a><a href="index.html">← Documentation</a><button class="btn btn-secondary" id="reference-theme" type="button">Toggle theme</button></header>
-<main><article>
+
+<body>
+    <!-- Icons: Lucide (ISC license) and GitHub mark from Octicons (MIT license), inlined as an SVG sprite. -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false">
+        <symbol id="i-search" viewBox="0 0 24 24">
+            <path d="m21 21-4.34-4.34" />
+            <circle cx="11" cy="11" r="8" />
+        </symbol>
+        <symbol id="i-menu" viewBox="0 0 24 24">
+            <path d="M4 5h16" />
+            <path d="M4 12h16" />
+            <path d="M4 19h16" />
+        </symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2" />
+            <path d="M12 20v2" />
+            <path d="m4.93 4.93 1.41 1.41" />
+            <path d="m17.66 17.66 1.41 1.41" />
+            <path d="M2 12h2" />
+            <path d="M20 12h2" />
+            <path d="m6.34 17.66-1.41 1.41" />
+            <path d="m19.07 4.93-1.41 1.41" />
+        </symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24">
+            <path
+                d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401" />
+        </symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24">
+            <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 24 24">
+            <path d="M20 6 9 17l-5-5" />
+        </symbol>
+        <symbol id="i-terminal" viewBox="0 0 24 24">
+            <path d="M12 19h8" />
+            <path d="m4 17 6-6-6-6" />
+        </symbol>
+        <symbol id="i-info" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 16v-4" />
+            <path d="M12 8h.01" />
+        </symbol>
+        <symbol id="i-triangle-alert" viewBox="0 0 24 24">
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+            <path d="M12 9v4" />
+            <path d="M12 17h.01" />
+        </symbol>
+        <symbol id="i-arrow-right" viewBox="0 0 24 24">
+            <path d="M5 12h14" />
+            <path d="m12 5 7 7-7 7" />
+        </symbol>
+        <symbol id="i-arrow-up" viewBox="0 0 24 24">
+            <path d="m5 12 7-7 7 7" />
+            <path d="M12 19V5" />
+        </symbol>
+        <symbol id="i-arrow-down" viewBox="0 0 24 24">
+            <path d="M12 5v14" />
+            <path d="m19 12-7 7-7-7" />
+        </symbol>
+        <symbol id="i-corner-down-left" viewBox="0 0 24 24">
+            <path d="M20 4v7a4 4 0 0 1-4 4H4" />
+            <path d="m9 10-5 5 5 5" />
+        </symbol>
+        <symbol id="i-hash" viewBox="0 0 24 24">
+            <line x1="4" x2="20" y1="9" y2="9" />
+            <line x1="4" x2="20" y1="15" y2="15" />
+            <line x1="10" x2="8" y1="3" y2="21" />
+            <line x1="16" x2="14" y1="3" y2="21" />
+        </symbol>
+        <symbol id="i-file-text" viewBox="0 0 24 24">
+            <path
+                d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
+            <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+            <path d="M10 9H8" />
+            <path d="M16 13H8" />
+            <path d="M16 17H8" />
+        </symbol>
+        <symbol id="i-book-open" viewBox="0 0 24 24">
+            <path d="M12 5v16" />
+            <path
+                d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z" />
+        </symbol>
+        <symbol id="i-download" viewBox="0 0 24 24">
+            <path d="M12 15V3" />
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <path d="m7 10 5 5 5-5" />
+        </symbol>
+        <symbol id="i-log-in" viewBox="0 0 24 24">
+            <path d="m10 17 5-5-5-5" />
+            <path d="M15 12H3" />
+            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+        </symbol>
+        <symbol id="i-wallet" viewBox="0 0 24 24">
+            <path
+                d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1" />
+            <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" />
+        </symbol>
+        <symbol id="i-tag" viewBox="0 0 24 24">
+            <path
+                d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
+            <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+        </symbol>
+        <symbol id="i-list-filter" viewBox="0 0 24 24">
+            <path d="M2 5h20" />
+            <path d="M6 12h12" />
+            <path d="M9 19h6" />
+        </symbol>
+        <symbol id="i-credit-card" viewBox="0 0 24 24">
+            <rect width="20" height="14" x="2" y="5" rx="2" />
+            <line x1="2" x2="22" y1="10" y2="10" />
+            <path d="M6 14h2" />
+        </symbol>
+        <symbol id="i-message-square" viewBox="0 0 24 24">
+            <path
+                d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" />
+        </symbol>
+        <symbol id="i-braces" viewBox="0 0 24 24">
+            <path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1" />
+            <path d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1" />
+        </symbol>
+        <symbol id="i-refresh-cw" viewBox="0 0 24 24">
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+            <path d="M21 3v5h-5" />
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+            <path d="M8 16H3v5" />
+        </symbol>
+        <symbol id="i-upload" viewBox="0 0 24 24">
+            <path d="M12 3v12" />
+            <path d="m17 8-5-5-5 5" />
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        </symbol>
+        <symbol id="i-wrench" viewBox="0 0 24 24">
+            <path
+                d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" />
+        </symbol>
+        <symbol id="i-globe" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+            <path d="M2 12h20" />
+        </symbol>
+        <symbol id="i-code-xml" viewBox="0 0 24 24">
+            <path d="m18 16 4-4-4-4" />
+            <path d="m6 8-4 4 4 4" />
+            <path d="m14.5 4-5 16" />
+        </symbol>
+        <symbol id="i-shield-check" viewBox="0 0 24 24">
+            <path
+                d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+            <path d="m9 12 2 2 4-4" />
+        </symbol>
+        <symbol id="i-smartphone" viewBox="0 0 24 24">
+            <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
+            <path d="M12 18h.01" />
+        </symbol>
+        <symbol id="i-table-2" viewBox="0 0 24 24">
+            <path d="M3 9h18" />
+            <path d="M9 3v18" />
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+        </symbol>
+        <symbol id="i-github" viewBox="0 0 16 16">
+            <path
+                d="M6.766 11.328c-2.063-.25-3.516-1.734-3.516-3.656 0-.781.281-1.625.75-2.188-.203-.515-.172-1.609.063-2.062.625-.078 1.468.25 1.968.703.594-.187 1.219-.281 1.985-.281.765 0 1.39.094 1.953.265.484-.437 1.344-.765 1.969-.687.218.422.25 1.515.046 2.047.5.593.766 1.39.766 2.203 0 1.922-1.453 3.375-3.547 3.64.531.344.89 1.094.89 1.954v1.625c0 .468.391.734.86.547C13.781 14.359 16 11.53 16 8.03 16 3.61 12.406 0 7.984 0 3.563 0 0 3.61 0 8.031a7.88 7.88 0 0 0 5.172 7.422c.422.156.828-.125.828-.547v-1.25c-.219.094-.5.156-.75.156-1.031 0-1.64-.562-2.078-1.609-.172-.422-.36-.672-.719-.719-.187-.015-.25-.093-.25-.187 0-.188.313-.328.625-.328.453 0 .844.281 1.25.86.313.452.64.655 1.031.655s.641-.14 1-.5c.266-.265.47-.5.657-.656" />
+        </symbol>
+    </svg>
+    <a class="skip" href="index.html#content">Skip to content</a>
+
+    <header class="header">
+        <div class="header-inner">
+            <button id="menu-btn" class="icon-btn menu-btn" type="button" aria-label="Toggle navigation"
+                aria-expanded="false" aria-controls="sidebar">
+                <svg class="ico" aria-hidden="true">
+                    <use href="index.html#i-menu" />
+                </svg>
+            </button>
+            <a class="brand" href="index.html#overview">
+                <svg width="28" height="28" viewBox="0 0 64 64" aria-hidden="true">
+                    <rect width="64" height="64" rx="16" fill="#702da0" />
+                    <path d="m17 20 13 12-13 12m23 0h10" fill="none" stroke="#fff" stroke-width="5"
+                        stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span>ncell-cli</span>
+            </a>
+            <span class="version">v0.1.0</span>
+            <div class="header-center">
+                <button id="search-btn" class="search-btn" type="button" aria-label="Search documentation"
+                    aria-keyshortcuts="/">
+                    <svg class="ico" aria-hidden="true">
+                        <use href="index.html#i-search" />
+                    </svg>
+                    <span class="search-text">Search documentation</span>
+                    <kbd>/</kbd>
+                </button>
+            </div>
+            <div class="header-actions">
+                <a class="icon-btn" href="https://github.com/rohityadav-sas/ncell-cli"
+                    aria-label="ncell-cli on GitHub"><svg class="ico ico-fill" aria-hidden="true">
+                        <use href="index.html#i-github" />
+                    </svg></a>
+                <button id="theme-btn" class="icon-btn theme-btn" type="button" aria-label="Switch theme">
+                    <svg class="ico icon-moon" aria-hidden="true">
+                        <use href="index.html#i-moon" />
+                    </svg><svg class="ico icon-sun" aria-hidden="true">
+                        <use href="index.html#i-sun" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div id="scrim" class="scrim" hidden></div>
+
+    <aside id="sidebar">
+        <nav aria-label="Documentation">
+            <p class="nav-title">Getting started</p>
+            <a href="index.html#overview"><svg class="ico" aria-hidden="true">
+                    <use href="index.html#i-book-open" />
+                </svg><span>Overview</span></a>
+            <a href="index.html#installation"><svg class="ico" aria-hidden="true">
+                    <use href="index.html#i-download" />
+                </svg><span>Installation</span></a>
+            <a href="index.html#login"><svg class="ico" aria-hidden="true">
+                    <use href="index.html#i-log-in" />
+                </svg><span>Authentication</span></a>
+            <p class="nav-title">Account</p>
+            <a href="index.html#balance"><svg class="ico" aria-hidden="true">
+                    <use href="index.html#i-wallet" />
+                </svg><span>Balance and profile</span></a>
+            <a href="index.html#plans"><svg class="ico" aria-hidden="true">
+                    <use href="index.html#i-tag" />
+                </svg><span>Plans and categories</span></a>
+            <a href="index.html#searching"><svg class="ico" aria-hidden="true">
+                    <use href="index.html#i-list-filter" />
+                </svg><span>Search and sorting</span></a>
+            <a href="index.html#subscribe"><svg class="ico" aria-hidden="true">
+                    <use href="index.html#i-credit-card" />
+                </svg><span>Subscribe to a plan</span></a>
+            <a href="index.html#sms"><svg class="ico" aria-hidden="true">
+                    <use href="index.html#i-message-square" />
+                </svg><span>Free SMS</span></a>
+            <p class="nav-title">Guides</p>
+            <a href="index.html#json"><svg class="ico" aria-hidden="true">
+                    <use href="index.html#i-braces" />
+                </svg><span>JSON output and scripting</span></a>
+            <a href="index.html#sessions"><svg class="ico" aria-hidden="true">
+                    <use href="index.html#i-refresh-cw" />
+                </svg><span>Sessions and token refresh</span></a>
+            <a href="index.html#import"><svg class="ico" aria-hidden="true">
+                    <use href="index.html#i-upload" />
+                </svg><span>Import a session</span></a>
+            <a href="index.html#errors"><svg class="ico" aria-hidden="true">
+                    <use href="index.html#i-wrench" />
+                </svg><span>Troubleshooting</span></a>
+            <p class="nav-title">Reference</p>
+            <a href="index.html#commands"><svg class="ico" aria-hidden="true">
+                    <use href="index.html#i-terminal" />
+                </svg><span>Command reference</span></a>
+            <a href="#response-codes"><svg class="ico" aria-hidden="true"><use href="index.html#i-info" /></svg><span>Response codes</span></a>
+            <a href="index.html#protocol"><svg class="ico" aria-hidden="true">
+                    <use href="index.html#i-globe" />
+                </svg><span>API and request design</span></a>
+            <a href="index.html#development"><svg class="ico" aria-hidden="true">
+                    <use href="index.html#i-code-xml" />
+                </svg><span>Development</span></a>
+        </nav>
+    </aside>
+
+    <main>
+        <article id="content">
+
 <p class="reference-eyebrow">NCELL-CLI / REFERENCE</p>
-<h1>Response codes</h1>
+<h1 id="response-codes">Response codes</h1>
 <p class="lead">255 source-defined message mappings and 16 additional constants with unconfirmed meanings.</p>
 <p>These are labels recovered from the supplied Android app, not a complete specification of the server. The server may return a more specific <code>responseDesc</code>: for example, <code>BIL2006</code> maps to “Product Subscription not success,” while a captured response reported a duplicate subscription request.</p>
-<div class="callout"><p><strong>CLI output:</strong> plain-text errors currently explain the <code>LGN</code> login codes only. Other errors show their HTTP status and code. <code>--json</code> preserves the server response, including its message. Successful subscriptions print <code>Subscribed to &lt;plan name&gt;.</code></p></div>
+<div class="callout"><p><strong>CLI output:</strong> plain-text API errors include the HTTP status, response code and its mapped meaning. Unmapped codes are explicitly marked unconfirmed or unavailable. <code>--json</code> preserves the server response, including its message. Successful subscriptions print <code>Subscribed to &lt;plan name&gt;.</code></p></div>
 <div class="reference-filters"><label>Search codes or meanings<input id="code-search" type="search" placeholder="BIL1000, expired, balance…"></label><label>Code prefix<select id="code-prefix"><option value="">All prefixes</option><option>ACM</option><option>BAL</option><option>BIL</option><option>BSAM</option><option>BSS</option><option>BTF</option><option>CAU</option><option>CL</option><option>CLM</option><option>CNST</option><option>CPM</option><option>DVS</option><option>HIS</option><option>HNM</option><option>IMG</option><option>LCM</option><option>LGN</option><option>LNG</option><option>LYT</option><option>MFV</option><option>MRG</option><option>OCR</option><option>OPS</option><option>OTP</option><option>PMT</option><option>PSU</option><option>QAP</option><option>QDP</option><option>RE</option><option>RFB</option><option>RFM</option><option>SM</option><option>SMS</option><option>SPT</option><option>SUB</option><option>SUR</option></select></label></div>
 <p id="code-count" role="status">271 codes</p>
 <div class="table-wrap"><table><thead><tr><th scope="col">Code</th><th scope="col">App message</th></tr></thead><tbody id="code-rows"><tr data-prefix="ACM"><td><code>ACM1001</code></td><td>Transactions not found in given date range</td></tr>
@@ -292,5 +604,53 @@
 <p id="code-empty" hidden>No matching codes.</p>
 <details><summary>Source and limitations</summary><p>Extracted from the supplied <code>index.android.bundle</code> (Hermes bytecode). English message object at disassembly line 2135255. SHA-256: <code class="source-hash">e06d3d62ea59888644234781f3eaf8599b8916aac96b1bf1d80eb2675c561a22</code>.</p><p>Message wording is retained from the app. Unmapped constants are marked unconfirmed; empty and null mappings are identified explicitly. Prefixes are grouping labels, not confirmed acronym expansions. No live requests or purchases were made to derive this reference.</p></details>
 <p><a href="index.html#errors">← Troubleshooting</a></p>
-</article></main>
-</body></html>
+
+        </article>
+
+        <footer class="page-footer">
+            <p>
+                ncell-cli v0.1.0 <span class="footer-dot">·</span> MIT
+                licensed
+            </p>
+            <a href="https://github.com/rohityadav-sas/ncell-cli"><svg class="ico ico-fill" aria-hidden="true">
+                    <use href="#i-github" />
+                </svg><span>View source on GitHub</span></a>
+            <p class="attribution">
+                Independent project. Ncell logo belongs to Ncell.
+                <a href="third-party-notices.txt">Icon credits and licenses</a>.
+            </p>
+        </footer>
+    </main>
+
+    <dialog id="search-dialog" aria-label="Search documentation">
+        <div class="search-head">
+            <svg class="ico" aria-hidden="true">
+                <use href="#i-search" />
+            </svg>
+            <input id="search-input" type="search" placeholder="Search documentation" autocomplete="off"
+                spellcheck="false" role="combobox" aria-label="Search documentation" aria-expanded="false"
+                aria-controls="search-results" aria-autocomplete="list" />
+            <kbd>Esc</kbd>
+        </div>
+        <p id="search-status" class="search-hint" role="status"></p>
+        <ul id="search-results" role="listbox" aria-label="Search results"></ul>
+        <div class="search-foot">
+            <span><kbd><svg class="ico" aria-hidden="true">
+                        <use href="#i-arrow-up" />
+                    </svg></kbd><kbd><svg class="ico" aria-hidden="true">
+                        <use href="#i-arrow-down" />
+                    </svg></kbd>
+                to navigate</span>
+            <span><kbd><svg class="ico" aria-hidden="true">
+                        <use href="#i-corner-down-left" />
+                    </svg></kbd>
+                to open</span>
+            <span><kbd>Esc</kbd> to close</span>
+        </div>
+    </dialog>
+
+    <script src="app.js" defer></script>
+    <script src="response-codes.js" defer></script>
+</body>
+
+</html>
