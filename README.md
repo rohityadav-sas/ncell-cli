@@ -13,7 +13,7 @@ OTP login · balances · plans · subscriptions · free SMS
 
 ## Get started
 
-Download the [Windows release](https://github.com/rohityadav-sas/ncell-cli/releases/latest), download `ncell.exe`, and run `ncell.exe` from a terminal. See the [changelog](CHANGELOG.md).
+Download the [Windows release](https://github.com/rohityadav-sas/ncell-cli/releases/latest), extract the ZIP, and run `ncell.exe` from a terminal. See the [changelog](CHANGELOG.md).
 
 To build from source, install [stable Rust](https://rustup.rs/), then:
 
@@ -51,5 +51,6 @@ cargo test --locked
 Documentation lives in `docs/`, built with plain HTML, CSS and JavaScript. GitHub Actions deploys it to Pages. Local integration tests and the optional Android token bridge are excluded from this repository.
 
 An independent project for Ncell Nepal. Not affiliated with or endorsed by Ncell.
+
 
 

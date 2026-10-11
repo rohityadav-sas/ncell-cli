@@ -16,5 +16,5 @@
 
 ### Downloads
 
-- Windows x86_64: download `ncell.exe` directly or use the ZIP archive.
+- Windows x86_64: download and extract the ZIP archive, then run `ncell.exe`.
 - macOS and Linux users currently build from source; Linux requires an unlocked Secret Service provider.
