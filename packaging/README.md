@@ -10,7 +10,7 @@ The Windows ZIP contains `ncell.exe` and the MIT license. Its checksum is pinned
 winget install --id RohitYadav.NcellCLI --exact
 ```
 
-Validate locally with `winget validate --manifest packaging/winget/0.1.0`. Installation from a local manifest requires the administrator-controlled `LocalManifestFiles` setting. This setting was not changed during publishing; the local install test was blocked by it. A Windows CI job downloads the published ZIP, checks its checksum and MIT license, and tests the executable with `--version` and `--help`. Local download checks timed out, so use the CI result for that verification.
+Validate locally with `winget validate --manifest packaging/winget/0.1.0`. Installation from a local manifest requires the administrator-controlled `LocalManifestFiles` setting. This setting was not changed during publishing; the local install test was blocked by it. The Windows CI download, checksum, MIT-license, version and help checks passed in run 38167578248. Local download checks timed out; the published archive was verified by CI.
 
 ## Scoop
 
@@ -32,7 +32,7 @@ brew tap rohityadav-sas/ncell-cli https://github.com/rohityadav-sas/ncell-cli
 brew install rohityadav-sas/ncell-cli/ncell-cli
 ```
 
-The formula builds the MIT-licensed source commit `eceb12d` with Cargo. The archive checksum is pinned. This is a custom tap, not a homebrew/core listing. A macOS GitHub Actions job installs and tests the formula. Linux additionally needs a working Secret Service at runtime.
+The formula builds the MIT-licensed source commit `eceb12d` with Cargo. The archive checksum is pinned. This is a custom tap, not a homebrew/core listing. The macOS Homebrew installation and formula tests passed in run 38167412633. Linux additionally needs a working Secret Service at runtime.
 
 ## crates.io
 
@@ -50,4 +50,5 @@ Once published, users can run `cargo install ncell-cli --locked`. Until then, us
 ## Updating
 
 For each new release, update the Cargo version, publish a new versioned ZIP, then update WinGet/Scoop versions, URLs and SHA-256 hashes. Update the Homebrew source reference, version and archive hash. Validate manifests and test the package before submitting another WinGet pull request. Release assets should remain immutable after package-manager publication.
+
 
