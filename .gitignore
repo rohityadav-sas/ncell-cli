@@ -1,0 +1,12 @@
+/target/
+.session.json
+session.json
+.env
+.env.*
+*.log
+*.har
+*.sqlite
+*.sqlite-*
+*token*.json
+/sync_token.ps1
+/tests/
