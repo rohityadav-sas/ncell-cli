@@ -48,8 +48,8 @@ WinGet [submission #450764](https://github.com/microsoft/winget-pkgs/pull/450764
 ## A few commands
 
 ```sh
-ncell plans --list-tags
-ncell search "SMS" --tag 50 --sort validity:desc,price:asc
+ncell plans --list-categories
+ncell search "SMS" --category 50 --sort validity:desc,price:asc
 ncell profile --json
 ncell send-free-sms 98XXXXXXXX "Hello"
 ```

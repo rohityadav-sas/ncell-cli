@@ -282,7 +282,7 @@
                 </svg><span>Balance and profile</span></a>
             <a href="#plans"><svg class="ico" aria-hidden="true">
                     <use href="#i-tag" />
-                </svg><span>Plans and tags</span></a>
+                </svg><span>Plans and categories</span></a>
             <a href="#searching"><svg class="ico" aria-hidden="true">
                     <use href="#i-list-filter" />
                 </svg><span>Search and sorting</span></a>
@@ -350,7 +350,7 @@
                             with an SMS one-time password.</span></span></a>
                 <a class="card" href="#plans"><span class="icon-tile"><svg class="ico" aria-hidden="true">
                             <use href="#i-tag" />
-                        </svg></span><span><span class="card-title">Plans and tags</span><span class="card-text">Browse
+                        </svg></span><span><span class="card-title">Plans and categories</span><span class="card-text">Browse
                             catalogs and find the right pack.</span></span></a>
                 <a class="card" href="#subscribe"><span class="icon-tile"><svg class="ico" aria-hidden="true">
                             <use href="#i-credit-card" />
@@ -369,7 +369,7 @@
             </nav>
 
             <h2 id="example">Example</h2>
-            <pre data-lang="Shell"><code>ncell search "SMS" --tag 50 --sort price</code></pre>
+            <pre data-lang="Shell"><code>ncell search "SMS" --category 50 --sort price</code></pre>
             <pre data-lang="Output"><code>ID    Plan                      Price     Validity
 984   1 Day: 100 All Net SMS    Rs. 15    1 DAY
 985   7 Day: 300 All Net SMS    Rs. 45    7 DAY
@@ -393,12 +393,6 @@ ncell --help</code></pre>
                 extracted directory. Add that directory to your PATH if you
                 want to run it anywhere. macOS and Linux currently build
                 from source.
-            </p>
-            <p>
-                No Android phone or root access is needed for normal CLI
-                use. See the
-                <a href="https://github.com/rohityadav-sas/ncell-cli/blob/main/CHANGELOG.md">changelog</a>
-                for release history.
             </p>
 
             <h3 id="installation-packages">Package managers</h3>
@@ -427,188 +421,65 @@ brew install rohityadav-sas/ncell-cli/ncell-cli</code></pre>
             </p>
             <pre
                 data-lang="Shell"><code>cargo install --git https://github.com/rohityadav-sas/ncell-cli --locked</code></pre>
-            <p>
-                See the
-                <a href="https://github.com/rohityadav-sas/ncell-cli/blob/main/packaging/README.md">packaging guide</a>
-                for installation checks and publishing details.
-            </p>
-
-            <h3 id="installation-build">Build without installing</h3>
-            <pre data-lang="Shell"><code>cargo build --release --locked</code></pre>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Platform</th>
-                            <th>Executable</th>
-                            <th>Credential storage</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Windows</td>
-                            <td><code>.\target\release\ncell.exe</code></td>
-                            <td>Credential Manager</td>
-                        </tr>
-                        <tr>
-                            <td>macOS</td>
-                            <td><code>./target/release/ncell</code></td>
-                            <td>Keychain</td>
-                        </tr>
-                        <tr>
-                            <td>Linux</td>
-                            <td><code>./target/release/ncell</code></td>
-                            <td>Secret Service</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <p>
-                Linux requires a session D-Bus and an unlocked Secret
-                Service provider, such as GNOME Keyring or KWallet. Headless
-                environments without a credential service are unsupported.
-            </p>
-
-            <h3 id="installation-update">Update an existing install</h3>
-            <pre data-lang="Shell"><code>git pull
-cargo install --path . --locked --force</code></pre>
 
             <h2 id="login">Authentication</h2>
-            <p>Sign in with an SMS code:</p>
+            <p>Sign in with an OTP:</p>
             <pre data-lang="Shell"><code>ncell login 98XXXXXXXX</code></pre>
-            <p>
-                Use a ten-digit Nepal mobile number, optionally prefixed
-                with <code>+977</code>. The command requests an OTP and
-                prompts for it without echoing the input. The number must be
-                eligible for Ncell self-care login.
-            </p>
-            <ol>
-                <li>
-                    A local device ID is generated or reused, then saved
-                    before the OTP request.
-                </li>
-                <li>
-                    Ncell sends the SMS code. Enter it at
-                    <code>Enter OTP:</code>.
-                </li>
-                <li>
-                    The CLI validates it with the same device ID and saves
-                    the returned tokens in your native keyring.
-                </li>
-            </ol>
 
-            <h3 id="login-verify">Resume instead of resending</h3>
+            <h3 id="login-verify">Resume instead of resending OTP again</h3>
             <pre data-lang="Shell"><code>ncell login 98XXXXXXXX --verify</code></pre>
             <p>
                 Use this after an interruption or mistyped OTP. It resumes
                 the pending login for that number without generating another
-                SMS. For an expired code, run normal login again. There is
-                no automatic OTP resend.
+                OTP.
             </p>
-            <div class="callout callout-note" role="note">
-                <svg class="ico" aria-hidden="true">
-                    <use href="#i-info" />
-                </svg>
-                <div>
-                    <p class="callout-title">Note</p>
-                    <p>
-                        Only one account and one pending login are stored. A
-                        failed login preserves the previously authenticated
-                        account. Run one login process at a time.
-                    </p>
-                </div>
-            </div>
 
             <h3 id="login-session">Inspect or remove the saved session</h3>
             <pre data-lang="Shell"><code>ncell status
 ncell logout</code></pre>
             <p>
-                <code>status</code> checks local storage, not server token
-                validity. <code>logout</code> deletes the local session and
-                device ID; it does not revoke tokens on Ncell's server.
+            <ul>
+                <li>
+                    <code>status</code> shows the logged-in number and
+                    session expiry.
+                </li>
+                <li>
+                    <code>logout</code> deletes the local session and
+                    device ID.
+                </li>
+            </ul>
             </p>
 
             <h2 id="balance">Balance and profile</h2>
             <pre data-lang="Shell"><code>ncell balance
-ncell balance --json
 ncell profile
-ncell profile --json</code></pre>
-            <p>
-                Balance output summarizes credit, data, voice and SMS. JSON
-                returns the complete balance response object, including
-                details and expiry information supplied by the server.
-            </p>
-            <p>
-                Profile output shows the account number, name, SIM type,
-                status, plan and payment mode when provided.
-            </p>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Profile status</th>
-                            <th>CLI label</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><code>B01</code></td>
-                            <td>Active</td>
-                        </tr>
-                        <tr>
-                            <td><code>B03</code></td>
-                            <td>All Services Blocked</td>
-                        </tr>
-                        <tr>
-                            <td><code>B04</code></td>
-                            <td>Outgoing Blocked</td>
-                        </tr>
-                        <tr>
-                            <td><code>B02</code> / other</td>
-                            <td>
-                                Shown unchanged; meaning is not confirmed
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <p>
-                These labels use the profile's <code>status</code> field.
-                They are different from the local login check performed by
-                <code>ncell status</code>.
-            </p>
-            <div class="callout callout-warning" role="note">
-                <svg class="ico" aria-hidden="true">
-                    <use href="#i-triangle-alert" />
-                </svg>
-                <div>
-                    <p class="callout-title">Warning</p>
-                    <p>
-                        Profile JSON can contain private account details,
-                        including PIN/PUK information. Review it before
-                        sharing logs or screenshots.
-                    </p>
-                </div>
-            </div>
+</code></pre>
+            <ul>
+                <li>
+                    <code>balance</code> shows the current credit, data,
+                    voice and SMS balances.
+                </li>
+                <li>
+                    <code>profile</code> shows the account number, name,
+                    SIM type, status, plan and payment mode.
+                </li>
+                <li>
+                    <code>--json</code>
+                    returns the complete response object.
+                </li>
+            </ul>
 
-            <h2 id="plans">Plans and tags</h2>
+            <h2 id="plans">Plans and categories</h2>
             <pre data-lang="Shell"><code>ncell plans
-ncell plans --list-tags
-ncell plans --tag 50
-ncell plans --tag 61
-ncell plans --tag 66 --json</code></pre>
-            <p>
-                The default tag is <code>66</code>. The CLI lists the
-                current catalog for your account, showing plan ID, name,
-                price and validity. Prices omit a trailing <code>.00</code>;
-                fractional amounts remain intact, and free packs display
-                <code>Free</code>.
-            </p>
+ncell plans --list-categories
+ncell plans --category 50
+ncell plans --category 61
+ncell plans --category 66 --json</code></pre>
             <div class="table-wrap">
                 <table>
                     <thead>
                         <tr>
-                            <th>Tag</th>
+                            <th>Category</th>
                             <th>Catalog</th>
                         </tr>
                     </thead>
@@ -628,35 +499,21 @@ ncell plans --tag 66 --json</code></pre>
                     </tbody>
                 </table>
             </div>
-            <p>
-                Use <code>--list-tags</code> for the full, current list.
-                Different categories may use the same label, such as “All
-                Packs”, while their IDs identify different catalogs. An
-                empty tag is possible for an account; a listed tag does not
-                guarantee available offers.
-            </p>
-            <p>
-                Non-default tags are resolved from the server's category
-                list. For a tag with multiple categories, data takes
-                priority, followed by voice and SMS. Unknown or unsupported
-                categories return an error. Tag listing cannot be combined
-                with an explicit tag, search or sorting options.
-            </p>
 
             <h2 id="searching">Search and sorting</h2>
-            <pre data-lang="Shell"><code>ncell search "SMS" --tag 50
+            <pre data-lang="Shell"><code>ncell search "SMS" --category 50
 ncell search "Super" --sort price
 ncell plans --search "Combo" --sort validity:desc,price:asc</code></pre>
             <p>
                 Search sends the keyword to Ncell's catalog endpoint. It is
-                server-side and scoped to the selected tag, not a local text
+                server-side and scoped to the selected category, not a local text
                 filter or an all-catalog search. Omitting
-                <code>--tag</code> searches tag 66. An empty keyword is
+                <code>--category</code> searches category 66. An empty keyword is
                 rejected; no matches produce an empty catalog.
             </p>
 
             <h3 id="searching-sort">Sort by more than one field</h3>
-            <pre data-lang="Shell"><code>ncell search "SMS" --tag 50 --sort validity:desc,price:asc
+            <pre data-lang="Shell"><code>ncell search "SMS" --category 50 --sort validity:desc,price:asc
 ncell plans --sort validity:desc --sort price:asc
 ncell plans --sort validity,price</code></pre>
             <p>
@@ -676,12 +533,12 @@ ncell plans --sort validity,price</code></pre>
             </p>
 
             <h2 id="subscribe">Subscribe to a plan</h2>
-            <pre data-lang="Shell"><code>ncell plans --tag 50
-ncell subscribe --tag 50 --id 984</code></pre>
+            <pre data-lang="Shell"><code>ncell plans --category 50
+ncell subscribe --category 50 --id 984</code></pre>
             <p>
-                Use the plan ID from the catalog and the same tag that
+                Use the plan ID from the catalog and the same category that
                 listed it. <code>--id</code> is required;
-                <code>--tag</code> defaults to 66. A tag ID is not a plan
+                <code>--category</code> defaults to 66. A category ID is not a plan
                 ID.
             </p>
             <div class="callout callout-warning" role="note">
@@ -743,7 +600,7 @@ ncell send-free-sms 98XXXXXXXX "Hello" --json</code></pre>
 
             <h2 id="json">JSON output and scripting</h2>
             <pre data-lang="Shell"><code>ncell --json balance
-ncell plans --tag 50 --sort price --json
+ncell plans --category 50 --sort price --json
 ncell profile --json</code></pre>
             <p>
                 <code>--json</code> is global and works before or after any
@@ -792,7 +649,7 @@ ncell profile --json</code></pre>
             </p>
 
             <h3 id="json-powershell">PowerShell example</h3>
-            <pre data-lang="PowerShell"><code>$raw = ncell plans --tag 50 --json
+            <pre data-lang="PowerShell"><code>$raw = ncell plans --category 50 --json
 if ($LASTEXITCODE -eq 0) {
     $catalog = $raw | ConvertFrom-Json
     $catalog.availablePackages
@@ -1014,8 +871,8 @@ ncell import-session &lt; session.json</code></pre>
                         <tr>
                             <td>Plan not found</td>
                             <td>
-                                Use a plan ID and the tag that listed it.
-                                Tags and plans have separate IDs.
+                                Use a plan ID and the category that listed it.
+                                Categories and plans have separate IDs.
                             </td>
                         </tr>
                     </tbody>
@@ -1065,23 +922,23 @@ ncell import-session &lt; session.json</code></pre>
                         <tr>
                             <td><code>plans</code></td>
                             <td>
-                                <code>[--tag &lt;id&gt;] [--search
+                                <code>[--category &lt;id&gt;] [--search
                                         &lt;text&gt;] [--sort
                                         &lt;keys&gt;]</code>
-                                or <code>--list-tags</code>
+                                or <code>--list-categories</code>
                             </td>
                         </tr>
                         <tr>
                             <td><code>search</code></td>
                             <td>
-                                <code>&lt;keyword&gt; [--tag &lt;id&gt;]
+                                <code>&lt;keyword&gt; [--category &lt;id&gt;]
                                         [--sort &lt;keys&gt;]</code>
                             </td>
                         </tr>
                         <tr>
                             <td><code>subscribe</code></td>
                             <td>
-                                <code>--id &lt;plan-id&gt; [--tag
+                                <code>--id &lt;plan-id&gt; [--category
                                         &lt;id&gt;]</code>
                             </td>
                         </tr>
@@ -1112,7 +969,8 @@ ncell import-session &lt; session.json</code></pre>
             <h2 id="protocol">API and request design</h2>
             <p>
                 The shared blocking HTTP client calls
-                <code>https://sca.ncell.com.np/adl/et/telco/selfcare/ncell/api</code>. Requests use JSON content type
+                <code>https://sca.ncell.com.np/adl/et/telco/selfcare/ncell/api</code>. Requests use JSON content
+                type
                 and bearer authentication
                 where required, plus library-managed transport headers.
                 Redirect following is disabled.
@@ -1151,7 +1009,7 @@ ncell import-session &lt; session.json</code></pre>
                             </td>
                         </tr>
                         <tr>
-                            <td>Tags</td>
+                            <td>Categories</td>
                             <td><code>/v1.0/product-catalog/tags</code></td>
                         </tr>
                         <tr>
@@ -1183,7 +1041,7 @@ ncell import-session &lt; session.json</code></pre>
                 <code>msisdn</code>, <code>location</code>,
                 <code>primaryMsisdn</code> and <code>languageCode</code>.
                 Individual omission checks established their necessity on
-                OTP, balance, profile, tags, catalogs and refresh for the
+                OTP, balance, profile, categories, catalogs and refresh for the
                 tested flow.
             </p>
             <ul>
@@ -1198,11 +1056,11 @@ ncell import-session &lt; session.json</code></pre>
                     object and app-version header.
                 </li>
                 <li>
-                    Tags retain app version; omitting it silently hid a tag
+                    Categories retain app version; omitting it silently hid a category
                     in live checks.
                 </li>
                 <li>
-                    Catalogs retain number, language, tag,
+                    Catalogs retain number, language, category,
                     <code>sortby.name</code> and the common header. A
                     keyword is added only for search.
                 </li>

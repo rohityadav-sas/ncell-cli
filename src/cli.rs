@@ -37,25 +37,25 @@ enum Command {
     Profile,
     /// Send a free SMS to a Nepal mobile number.
     SendFreeSms { number: String, text: String },
-    /// Search plans on the server within a catalog tag.
+    /// Search plans on the server within a catalog category.
     Search {
         keyword: String,
         #[arg(long, default_value_t = 66)]
-        tag: u64,
+        category: u64,
         /// Ordered fields: price or validity, optionally followed by :asc or :desc.
         #[arg(long, value_delimiter = ',', value_parser = parse_sort, default_value = "price", value_name = "FIELD[:asc|desc],...")]
         sort: Vec<(Sort, bool)>,
     },
-    /// List available packs or catalog tags.
+    /// List available packs or catalog categories.
     Plans {
         /// Search plans on the server.
-        #[arg(long, conflicts_with = "list_tags")]
+        #[arg(long, conflicts_with = "list_categories")]
         search: Option<String>,
-        #[arg(long, default_value_t = 66, conflicts_with = "list_tags")]
-        tag: u64,
-        /// List tag IDs, names and categories.
+        #[arg(long, default_value_t = 66, conflicts_with = "list_categories")]
+        category: u64,
+        /// List category IDs, names and pack types.
         #[arg(long, conflicts_with = "sort")]
-        list_tags: bool,
+        list_categories: bool,
         /// Ordered fields: price or validity, optionally followed by :asc or :desc.
         #[arg(long, value_delimiter = ',', value_parser = parse_sort, default_value = "price", value_name = "FIELD[:asc|desc],...")]
         sort: Vec<(Sort, bool)>,
@@ -65,7 +65,7 @@ enum Command {
         #[arg(long)]
         id: String,
         #[arg(long, default_value_t = 66)]
-        tag: u64,
+        category: u64,
     },
     /// Import a session JSON from stdin into the system credential store.
     ImportSession,
@@ -95,10 +95,14 @@ fn parse_sort(value: &str) -> std::result::Result<(Sort, bool), String> {
 
 pub fn run(args: Args) -> Result<()> {
     let command = match args.command {
-        Command::Search { keyword, tag, sort } => Command::Plans {
+        Command::Search {
+            keyword,
+            category,
+            sort,
+        } => Command::Plans {
             search: Some(keyword),
-            tag,
-            list_tags: false,
+            category,
+            list_categories: false,
             sort,
         },
         command => command,
@@ -114,16 +118,16 @@ pub fn run(args: Args) -> Result<()> {
                 format!("SMS sent to {}.", normalize_number(&number)?),
             );
         }
-        Command::Subscribe { id, tag } => {
+        Command::Subscribe { id, category } => {
             let (response, name) = authenticated(|client, account, device_id| {
-                let catalog = client.plans(&account.msisdn, &account.access_token, tag)?;
+                let catalog = client.plans(&account.msisdn, &account.access_token, category)?;
                 let plan = catalog["availablePackages"]
                     .as_array()
                     .ok_or(Error::InvalidResponse)?
                     .iter()
                     .find(|p| p["id"].as_str() == Some(&id))
                     .ok_or(Error::InvalidInput(
-                        "Plan not found in this tag. Run plans --tag <ID>",
+                        "Plan not found in this category. Run plans --category <ID>",
                     ))?;
                 let response =
                     client.subscribe(&account.msisdn, &account.access_token, device_id, plan)?;
@@ -202,18 +206,20 @@ pub fn run(args: Args) -> Result<()> {
         command @ (Command::Balance | Command::Profile | Command::Plans { .. }) => {
             let profile = matches!(command, Command::Profile);
             let plans = matches!(command, Command::Plans { .. });
-            let list_tags = matches!(
+            let list_categories = matches!(
                 command,
                 Command::Plans {
-                    list_tags: true,
+                    list_categories: true,
                     ..
                 }
             );
             let (mut data, number) = authenticated(|client, account, _| {
-                let data = if list_tags {
-                    client.tags(&account.msisdn, &account.access_token)?
+                let data = if list_categories {
+                    client.categories(&account.msisdn, &account.access_token)?
                 } else if let Command::Plans {
-                    tag, ref search, ..
+                    category,
+                    ref search,
+                    ..
                 } = command
                 {
                     if search.as_ref().is_some_and(|s| s.trim().is_empty()) {
@@ -222,7 +228,7 @@ pub fn run(args: Args) -> Result<()> {
                     client.search_plans(
                         &account.msisdn,
                         &account.access_token,
-                        tag,
+                        category,
                         search.as_deref().unwrap_or(""),
                     )?
                 } else if profile {
@@ -234,7 +240,7 @@ pub fn run(args: Args) -> Result<()> {
             })?;
             if let Command::Plans {
                 sort,
-                list_tags: false,
+                list_categories: false,
                 ..
             } = command
             {
@@ -253,11 +259,11 @@ pub fn run(args: Args) -> Result<()> {
             }
             if args.json {
                 println!("{data:#}");
-            } else if list_tags {
-                println!("{:<6}  {:<22}  Category", "ID", "Tag");
+            } else if list_categories {
+                println!("{:<6}  {:<22}  Type", "ID", "Category");
                 println!("{}", "-".repeat(58));
-                for tag in data["tags"].as_array().ok_or(Error::InvalidResponse)? {
-                    let categories = tag["categories"]
+                for category in data["tags"].as_array().ok_or(Error::InvalidResponse)? {
+                    let categories = category["categories"]
                         .as_array()
                         .ok_or(Error::InvalidResponse)?
                         .iter()
@@ -266,8 +272,8 @@ pub fn run(args: Args) -> Result<()> {
                         .join(", ");
                     println!(
                         "{:<6}  {:<22}  {categories}",
-                        tag["id"].to_string(),
-                        text(&tag["name"]).trim()
+                        category["id"].to_string(),
+                        text(&category["name"]).trim()
                     );
                 }
             } else if plans {
@@ -275,7 +281,7 @@ pub fn run(args: Args) -> Result<()> {
                     .as_array()
                     .ok_or(Error::InvalidResponse)?;
                 if plans.is_empty() {
-                    println!("No plans available for this tag and account.");
+                    println!("No plans available for this category and account.");
                     return Ok(());
                 }
                 let width = plans
@@ -434,10 +440,10 @@ mod tests {
             vec!["doctor"],
             vec!["balance"],
             vec!["profile"],
-            vec!["search", "Super", "--tag", "66"],
+            vec!["search", "Super", "--category", "66"],
             vec!["plans", "--search", "Super"],
             vec!["send-free-sms", "9812345678", "Hello"],
-            vec!["plans", "--list-tags"],
+            vec!["plans", "--list-categories"],
             vec!["subscribe", "--id", "1225"],
             vec!["refresh"],
             vec!["import-session"],

@@ -72,7 +72,7 @@ impl Client {
         }
     }
 
-    pub fn tags(&self, msisdn: &str, token: &str) -> Result<Value> {
+    pub fn categories(&self, msisdn: &str, token: &str) -> Result<Value> {
         let mut header = request_header(msisdn, "N/A");
         header["appVersion"] = "8.2.1.0".into();
         let response = self.post(
@@ -86,28 +86,30 @@ impl Client {
         Ok(response)
     }
 
-    pub fn plans(&self, msisdn: &str, token: &str, tag: u64) -> Result<Value> {
-        self.search_plans(msisdn, token, tag, "")
+    pub fn plans(&self, msisdn: &str, token: &str, category: u64) -> Result<Value> {
+        self.search_plans(msisdn, token, category, "")
     }
 
     pub fn search_plans(
         &self,
         msisdn: &str,
         token: &str,
-        tag: u64,
+        category: u64,
         keyword: &str,
     ) -> Result<Value> {
-        let catalog = if tag == 66 {
+        let catalog = if category == 66 {
             "data"
         } else {
-            let tags = self.tags(msisdn, token)?;
+            let tags = self.categories(msisdn, token)?;
             let categories = tags["tags"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .find(|t| t["id"] == tag)
+                .find(|t| t["id"] == category)
                 .and_then(|t| t["categories"].as_array())
-                .ok_or(Error::InvalidInput("Unknown tag. Use plans --list-tags"))?;
+                .ok_or(Error::InvalidInput(
+                    "Unknown category. Use plans --list-categories",
+                ))?;
             [
                 ("GSM_DATA", "data"),
                 ("GSM_VOICE", "voice"),
@@ -116,12 +118,12 @@ impl Client {
             .into_iter()
             .find(|(name, _)| categories.iter().any(|c| c["name"] == *name))
             .map(|(_, catalog)| catalog)
-            .ok_or(Error::InvalidInput("Unsupported tag category"))?
+            .ok_or(Error::InvalidInput("Unsupported category type"))?
         };
         let mut body = json!({
             "msisdn": msisdn,
             "languageCode": "1",
-            "tagId": tag,
+            "tagId": category,
             "sortby": { "name": "price" },
             "requestHeader": request_header(msisdn, "SHOP"),
         });
