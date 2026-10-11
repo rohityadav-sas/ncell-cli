@@ -291,17 +291,11 @@
                 </svg><span>Subscribe to a plan</span></a>
             <a href="#sms"><svg class="ico" aria-hidden="true">
                     <use href="#i-message-square" />
-                </svg><span>Free SMS</span></a>
+                </svg><span>Send Free SMS</span></a>
             <p class="nav-title">Guides</p>
-            <a href="#json"><svg class="ico" aria-hidden="true">
-                    <use href="#i-braces" />
-                </svg><span>JSON output and scripting</span></a>
             <a href="#sessions"><svg class="ico" aria-hidden="true">
                     <use href="#i-refresh-cw" />
                 </svg><span>Sessions and token refresh</span></a>
-            <a href="#errors"><svg class="ico" aria-hidden="true">
-                    <use href="#i-wrench" />
-                </svg><span>Troubleshooting</span></a>
             <p class="nav-title">Reference</p>
             <a href="#commands"><svg class="ico" aria-hidden="true">
                     <use href="#i-terminal" />
@@ -309,12 +303,6 @@
             <a href="response-codes.html"><svg class="ico" aria-hidden="true">
                     <use href="#i-info" />
                 </svg><span>Response codes</span></a>
-            <a href="#protocol"><svg class="ico" aria-hidden="true">
-                    <use href="#i-globe" />
-                </svg><span>API and request design</span></a>
-            <a href="#development"><svg class="ico" aria-hidden="true">
-                    <use href="#i-code-xml" />
-                </svg><span>Development</span></a>
         </nav>
     </aside>
 
@@ -346,8 +334,7 @@
                             release.</span></span></a>
                 <a class="card" href="#login"><span class="icon-tile"><svg class="ico" aria-hidden="true">
                             <use href="#i-log-in" />
-                        </svg></span><span><span class="card-title">Authentication</span><span class="card-text">Sign in
-                            with an SMS one-time password.</span></span></a>
+                        </svg></span><span><span class="card-title">Authentication</span><span class="card-text">Sign in with an SMS OTP.</span></span></a>
                 <a class="card" href="#plans"><span class="icon-tile"><svg class="ico" aria-hidden="true">
                             <use href="#i-tag" />
                         </svg></span><span><span class="card-title">Plans and categories</span><span
@@ -358,11 +345,10 @@
                         </svg></span><span><span class="card-title">Subscribe to a plan</span><span
                             class="card-text">Activate a listed pack from the command
                             line.</span></span></a>
-                <a class="card" href="#json"><span class="icon-tile"><svg class="ico" aria-hidden="true">
-                            <use href="#i-braces" />
-                        </svg></span><span><span class="card-title">JSON output and scripting</span><span
-                            class="card-text">Structured output for scripts and
-                            automation.</span></span></a>
+                <a class="card" href="#sms"><span class="icon-tile"><svg class="ico" aria-hidden="true">
+                            <use href="#i-message-square" />
+                        </svg></span><span><span class="card-title">Send Free SMS</span><span
+                            class="card-text">Send a message using your free SMS allowance.</span></span></a>
                 <a class="card" href="#commands"><span class="icon-tile"><svg class="ico" aria-hidden="true">
                             <use href="#i-terminal" />
                         </svg></span><span><span class="card-title">Command reference</span><span
@@ -578,7 +564,7 @@ ncell subscribe --category 50 --id 984</code></pre>
                         </tr>
                         <tr>
                             <td><code>profile</code></td>
-                            <td>Subscriber profile summary</td>
+                            <td>Profile summary</td>
                         </tr>
                         <tr>
                             <td><code>plans</code></td>
@@ -617,192 +603,23 @@ ncell subscribe --category 50 --id 984</code></pre>
                 </table>
             </div>
             <p>
-                Global options: <code>--json</code>, <code>--help</code>.
-                Use <code>ncell --version</code> for the version and
-                <code>ncell &lt;command&gt; --help</code> for a command's
-                usage.
-            </p>
-
-            <h2 id="protocol">API and request design</h2>
-            <p>
-                The shared blocking HTTP client calls
-                <code>https://sca.ncell.com.np/adl/et/telco/selfcare/ncell/api</code>. Requests use JSON content
-                type
-                and bearer authentication
-                where required, plus library-managed transport headers.
-                Redirect following is disabled.
-            </p>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Operation</th>
-                            <th>POST path</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Generate OTP</td>
-                            <td><code>/v1.0/user/otp/generate</code></td>
-                        </tr>
-                        <tr>
-                            <td>Validate OTP</td>
-                            <td><code>/v1.0/user/otp/validate</code></td>
-                        </tr>
-                        <tr>
-                            <td>Refresh</td>
-                            <td><code>/v1.0/user/refresh/token</code></td>
-                        </tr>
-                        <tr>
-                            <td>Balance</td>
-                            <td>
-                                <code>/v1.0/accountmgt/balance/query</code>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Profile</td>
-                            <td>
-                                <code>/v1.0/subscriber/profile/query</code>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Categories</td>
-                            <td><code>/v1.0/product-catalog/tags</code></td>
-                        </tr>
-                        <tr>
-                            <td>Catalogs / search</td>
-                            <td>
-                                <code>/v1.0/product/{data|voice|sms}-plans</code>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Subscribe</td>
-                            <td>
-                                <code>/v1.0/billingmgt/product/subscribe</code>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Free SMS</td>
-                            <td><code>/v1.0/smsmgt/free/sms/send</code></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <h3 id="protocol-fields">Retained request fields</h3>
-            <p>
-                The common JSON <code>requestHeader</code> has ten fields:
-                <code>requestId</code>, <code>timestamp</code>,
-                <code>channel</code>, <code>deviceType</code>,
-                <code>clientip</code>, <code>action</code>,
-                <code>msisdn</code>, <code>location</code>,
-                <code>primaryMsisdn</code> and <code>languageCode</code>.
-                Individual omission checks established their necessity on
-                OTP, balance, profile, categories, catalogs and refresh for the
-                tested flow.
-            </p>
+                Global commands:
             <ul>
-                <li>
-                    OTP generation retains number, device ID and login
-                    action. Validation retains number, device ID, nested
-                    action and OTP.
-                </li>
-                <li>Balance retains the number in its query object.</li>
-                <li>
-                    Profile accepts an empty query object, but requires the
-                    object and app-version header.
-                </li>
-                <li>
-                    Categories retain app version; omitting it silently hid a category
-                    in live checks.
-                </li>
-                <li>
-                    Catalogs retain number, language, category,
-                    <code>sortby.name</code> and the common header. A
-                    keyword is added only for search.
-                </li>
-                <li>
-                    Refresh retains the refresh-token object and matching
-                    device ID in the header.
-                </li>
-                <li>
-                    SMS uses destination, content and
-                    <code>isConfirm: 0</code>. Omitting the confirmation
-                    field failed despite an outer success code.
-                </li>
-                <li>
-                    Subscription retains captured metadata pending further
-                    omission tests.
-                </li>
+                <li><code>--json</code> outputs the complete JSON response</li>
+                <li><code>--help</code> shows help information</li>
+                <li><code>&lt;command&gt; --help</code> shows usage for a specific command</li>
             </ul>
-            <div class="callout callout-note" role="note">
-                <svg class="ico" aria-hidden="true">
-                    <use href="#i-info" />
-                </svg>
-                <div>
-                    <p class="callout-title">Note</p>
-                    <p>
-                        Individual common-header omissions for SMS and
-                        further subscription-field omissions remain
-                        unverified. “Minimum” describes observed checks, not
-                        every possible server behavior. API requirements can
-                        change.
-                    </p>
-                </div>
-            </div>
-
-            <h2 id="development">Development</h2>
-            <pre data-lang="Text"><code>src/
-├── api/          HTTP transport and request builders
-├── session/      Session models and native keyring
-├── auth.rs       Login and bounded token refresh
-├── cli.rs        Arguments, tables and JSON output
-├── error.rs      Safe error labels
-├── lib.rs        Reusable library
-└── main.rs       Process entry point
-docs/             This site: plain HTML, CSS and JavaScript
-assets/           README artwork</code></pre>
-            <p>
-                Libraries handle the standard work: <code>clap</code>,
-                <code>reqwest</code>, <code>serde</code>,
-                <code>keyring</code>, <code>rpassword</code>,
-                <code>chrono</code>, <code>uuid</code> and
-                <code>thiserror</code>. There is no custom HTTP stack or JWT
-                parser.
-            </p>
-            <pre data-lang="Shell"><code>cargo fmt --check
-cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked</code></pre>
-            <p>
-                CI checks Windows, macOS and Linux. Source unit tests are
-                included. The local integration-test directory and Android
-                token bridge are ignored and excluded from this repository.
-                Live account operations are separate from automated checks.
             </p>
 
-            <h3 id="development-docs">Documentation development</h3>
-            <pre data-lang="Shell"><code>python -m http.server 8080 --directory docs</code></pre>
-            <p>
-                Open <code>http://localhost:8080</code>. No build tools,
-                frontend framework, external fonts or runtime dependencies
-                are required. The Pages workflow publishes only
-                <code>docs/</code> after pushes to main.
-            </p>
-        </article>
-
-        <footer class="page-footer">
-            <p>
-                ncell-cli v0.1.0 <span class="footer-dot">·</span> MIT
-                licensed
-            </p>
-            <a href="https://github.com/rohityadav-sas/ncell-cli"><svg class="ico ico-fill" aria-hidden="true">
-                    <use href="#i-github" />
-                </svg><span>View source on GitHub</span></a>
-            <p class="attribution">
-                Independent project. Ncell logo belongs to Ncell.
-                <a href="third-party-notices.txt">Icon credits and licenses</a>.
-            </p>
-        </footer>
+            <footer class="page-footer">
+                <p>
+                    ncell-cli v0.1.0 <span class="footer-dot">·</span> MIT
+                    licensed
+                </p>
+                <a href="https://github.com/rohityadav-sas/ncell-cli"><svg class="ico ico-fill" aria-hidden="true">
+                        <use href="#i-github" />
+                    </svg><span>View source on GitHub</span></a>
+            </footer>
     </main>
 
     <dialog id="search-dialog" aria-label="Search documentation">
