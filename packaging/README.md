@@ -1,0 +1,52 @@
+# Package publishing
+
+The Windows ZIP contains `ncell.exe` and the MIT license. Its checksum is pinned in the Scoop and WinGet manifests. Do not replace a published archive after a package manager accepts its checksum; use a new version for future changes.
+
+## WinGet
+
+`winget/0.1.0/` contains the validated manifest set for `RohitYadav.NcellCLI`. Community-source availability requires Microsoft to merge the submission. After acceptance:
+
+```powershell
+winget install --id RohitYadav.NcellCLI --exact
+```
+
+Validate locally with `winget validate --manifest packaging/winget/0.1.0`. Installation from a local manifest requires the administrator-controlled `LocalManifestFiles` setting. This setting was not changed during publishing; the local install test was blocked by it. The downloaded ZIP was separately checksum-checked, extracted, and its executable tested with `--version` and `--help`.
+
+## Scoop
+
+The repository itself is a bucket. The manifest is `bucket/ncell-cli.json`.
+
+```powershell
+scoop bucket add ncell-cli https://github.com/rohityadav-sas/ncell-cli
+scoop install ncell-cli/ncell-cli
+```
+
+Scoop was not installed on the publishing machine. The package's ZIP contents and checksum were checked, but a full Scoop installation was not run here. No central-bucket approval is needed to use this custom bucket.
+
+## Homebrew
+
+The repository itself is a custom tap. Specify its remote URL because its name does not use the usual `homebrew-` prefix.
+
+```sh
+brew tap rohityadav-sas/ncell-cli https://github.com/rohityadav-sas/ncell-cli
+brew install rohityadav-sas/ncell-cli/ncell-cli
+```
+
+The formula builds the MIT-licensed source commit `eceb12d` with Cargo. The archive checksum is pinned. This is a custom tap, not a homebrew/core listing. A macOS GitHub Actions job installs and tests the formula. Linux additionally needs a working Secret Service at runtime.
+
+## crates.io
+
+Cargo metadata, the MIT license and an explicit source-file inclusion list are configured. `cargo package --locked` verifies the package builds and excludes local token scripts, integration tests, captures and documentation assets.
+
+Publishing requires the owner's crates.io account:
+
+```sh
+cargo login
+cargo publish --locked
+```
+
+Once published, users can run `cargo install ncell-cli --locked`. Until then, use `cargo install --git https://github.com/rohityadav-sas/ncell-cli --locked` or build from a clone.
+
+## Updating
+
+For each new release, update the Cargo version, publish a new versioned ZIP, then update WinGet/Scoop versions, URLs and SHA-256 hashes. Update the Homebrew source reference, version and archive hash. Validate manifests and test the package before submitting another WinGet pull request. Release assets should remain immutable after package-manager publication.

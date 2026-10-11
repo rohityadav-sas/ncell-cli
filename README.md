@@ -27,6 +27,24 @@ ncell balance
 
 No Android device is needed. Tokens are saved in your native credential store; Linux requires an unlocked Secret Service provider.
 
+## Package managers
+
+**Scoop (Windows)**
+
+```powershell
+scoop bucket add ncell-cli https://github.com/rohityadav-sas/ncell-cli
+scoop install ncell-cli/ncell-cli
+```
+
+**Homebrew (macOS / Linux, builds from source)**
+
+```sh
+brew tap rohityadav-sas/ncell-cli https://github.com/rohityadav-sas/ncell-cli
+brew install rohityadav-sas/ncell-cli/ncell-cli
+```
+
+WinGet is being submitted as `RohitYadav.NcellCLI`; it is not yet available in the community source. crates.io publishing is pending authentication. See the [packaging guide](packaging/README.md).
+
 ## A few commands
 
 ```sh
@@ -51,6 +69,7 @@ cargo test --locked
 Documentation lives in `docs/`, built with plain HTML, CSS and JavaScript. GitHub Actions deploys it to Pages. Local integration tests and the optional Android token bridge are excluded from this repository.
 
 An independent project for Ncell Nepal. Not affiliated with or endorsed by Ncell.
+
 
 
 

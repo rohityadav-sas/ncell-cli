@@ -1,0 +1,16 @@
+name: Homebrew package
+on:
+  push:
+    branches: [main]
+    paths: ['Formula/**', '.github/workflows/homebrew.yml']
+  workflow_dispatch:
+jobs:
+  install:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install and test formula
+        run: |
+          brew tap rohityadav-sas/ncell-cli "$GITHUB_WORKSPACE"
+          brew install --build-from-source rohityadav-sas/ncell-cli/ncell-cli
+          brew test rohityadav-sas/ncell-cli/ncell-cli
