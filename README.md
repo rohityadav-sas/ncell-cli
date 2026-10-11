@@ -1,6 +1,6 @@
 <div align="center">
 
-![Ncell CLI](assets/banner.gif)
+![Ncell CLI](assets/banner.svg)
 
 <img src="assets/icon.svg" width="64" height="64" alt="Ncell CLI icon" />
 
@@ -212,7 +212,7 @@ src/
 ├── lib.rs        Reusable library
 └── main.rs       Process entry point
 
-assets/           Original icon, SVG artwork and animated GIF banner
+assets/           Original SVG icon and static banner
 ```
 
 Built with `clap`, `reqwest`, `serde`, `keyring`, `rpassword`, `chrono`, `uuid` and `thiserror`. No custom HTTP stack, JWT parser or plaintext credential database.
@@ -244,7 +244,8 @@ The SMS body contains only destination, content and `isConfirm: 0`; removing `is
 
 **Less ceremony. More command line.**
 
-<sub>Original artwork · animated waves · built for the terminal</sub>
+<sub>Original artwork · built for the terminal</sub>
 
 </div>
+
 
