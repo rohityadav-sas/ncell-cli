@@ -1,17 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-label="Ncell CLI. Your Ncell account, one command away. Rust, Windows, macOS and Linux.">
   <defs>
     <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#160b2c"/><stop offset=".55" stop-color="#35115f"/><stop offset="1" stop-color="#771d68"/></linearGradient>
-    <linearGradient id="accent"><stop stop-color="#c084fc"/><stop offset="1" stop-color="#f472b6"/></linearGradient>
     <radialGradient id="glow"><stop stop-color="#a855f7" stop-opacity=".4"/><stop offset="1" stop-color="#a855f7" stop-opacity="0"/></radialGradient>
   </defs>
   <rect width="1200" height="360" rx="24" fill="url(#bg)"/>
   <circle cx="920" cy="80" r="290" fill="url(#glow)"/>
   <g fill="none" stroke="#d8b4fe" opacity=".12"><circle cx="1050" cy="40" r="110"/><circle cx="1050" cy="40" r="160"/><circle cx="1050" cy="40" r="210"/></g>
-  <g transform="translate(62 68)">
-    <rect width="70" height="70" rx="19" fill="url(#accent)"/>
-    <path d="m19 23 14 12-14 12m25 0h12" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="88" y="48" font-family="Segoe UI,Arial,sans-serif" font-size="48" font-weight="700" fill="white">ncell<tspan fill="#d8b4fe"> cli</tspan></text>
-  </g>
+  <g transform="translate(62 68)"><svg width="216" height="70" viewBox="0 0 113.22 36.62"><path fill="#fff" d="M75.68,9.54c-8.14,0-13.15,6.18-13.15,13.58,0,6.4,3.67,13.49,13.15,13.49,8.6,0,11.05-5.52,12.04-8.61h-4.49c-1.03,0-1.78.41-2.48,1.28-.3.34-1.8,2.05-4.82,2.05-6.12,0-6.21-4.85-6.32-6.52h18.57c.52-7.45-3.42-15.28-12.49-15.28ZM69.6,20.34c0-.52.41-5.48,5.87-5.48,3.62,0,4.94,2.05,5.62,5.48h-11.49Z"/><path fill="#fff" d="M92.55.55v28.96c.06,4.88.95,6.58,7.03,6.58V6.26c-.05-4.81-.98-5.71-7.03-5.71Z"/><path fill="#fff" d="M106.19.55v28.96c.06,4.88.95,6.58,7.03,6.58V6.26c-.05-4.81-.98-5.71-7.03-5.71Z"/><path fill="#fff" d="M54.79,26.11s-1.61-.06-2.22,1.64c-.88,2.42-2.49,3.59-5.22,3.59-4.25,0-5.87-4.05-5.87-8.21,0-3.95,1.67-8.26,6.03-8.26,2.72,0,4.16,1.22,4.78,2.8.34.86.84,1.64,2.4,1.64h4.97c-.38-6.65-6.09-9.76-12.1-9.76-8.86,0-13.13,6.42-13.13,13.89,0,8.36,5.8,13.18,12.98,13.18,6.28,0,11.41-3.15,12.4-10.5h-5Z"/><path fill="#fff" d="M30.48,36.08h-4.49c-2.66,0-3.82-.61-4.91-2.37-1.02-1.63-13.54-21.78-13.54-21.78h-.1v24.16H0V0h4.5C7.91,0,8.51,1.01,9.84,3.15c1.33,2.14,13.11,21.06,13.11,21.06h.1V0h.38c6.54,0,7.04,2.17,7.04,6.28v29.8Z"/></svg><text x="238" y="54" font-family="Segoe UI,Arial,sans-serif" font-size="48" font-weight="700" fill="#d8b4fe">cli</text></g>
   <text x="62" y="186" font-family="Segoe UI,Arial,sans-serif" font-size="25" fill="#f3e8ff">Your Ncell account, one command away.</text>
   <text x="63" y="225" font-family="Segoe UI,Arial,sans-serif" font-size="15" letter-spacing="2" fill="#d8b4fe">BUILT WITH RUST  /  WINDOWS · macOS · LINUX</text>
   <g transform="translate(710 115)">
@@ -23,4 +18,5 @@
   <path d="M0 293Q200 252 400 299T800 297T1200 281V360H0Z" fill="#a855f7" opacity=".16"></path>
   <path d="M0 320Q250 282 500 322T1000 318T1200 312V360H0Z" fill="#f472b6" opacity=".13"></path>
 </svg>
+
 

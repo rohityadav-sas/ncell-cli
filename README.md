@@ -2,7 +2,7 @@
 
 ![Ncell CLI](assets/banner.svg)
 
-<img src="assets/icon.svg" width="64" height="64" alt="Ncell CLI icon" />
+<img src="assets/icon.svg" width="144" height="64" alt="Ncell logo" />
 
 ### A little terminal. Your whole Ncell account.
 
@@ -17,7 +17,7 @@ OTP login · balances · plans · subscriptions · free SMS
 
 </div>
 
-> An independent Rust CLI for Ncell Nepal. Not affiliated with or endorsed by Ncell. The icon is original artwork for this project.
+> An independent Rust CLI for Ncell Nepal. Not affiliated with or endorsed by Ncell. Ncell logo belongs to Ncell; sourced from its [official website](https://www.ncell.com.np/images/site_logo_white.svg).
 
 ## ✨ Made for the terminal
 
@@ -212,7 +212,7 @@ src/
 ├── lib.rs        Reusable library
 └── main.rs       Process entry point
 
-assets/           Original SVG icon and static banner
+assets/           Official Ncell logo and static banner
 ```
 
 Built with `clap`, `reqwest`, `serde`, `keyring`, `rpassword`, `chrono`, `uuid` and `thiserror`. No custom HTTP stack, JWT parser or plaintext credential database.
@@ -244,8 +244,9 @@ The SMS body contains only destination, content and `isConfirm: 0`; removing `is
 
 **Less ceremony. More command line.**
 
-<sub>Original artwork · built for the terminal</sub>
+<sub>Built for the terminal</sub>
 
 </div>
+
 
 
