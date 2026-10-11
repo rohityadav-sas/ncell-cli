@@ -2,8 +2,6 @@
 
 ![Ncell CLI](assets/banner.svg)
 
-<img src="assets/icon.svg" width="144" height="64" alt="Ncell logo" />
-
 ### A little terminal. Your whole Ncell account.
 
 OTP login · balances · plans · subscriptions · free SMS
@@ -247,6 +245,7 @@ The SMS body contains only destination, content and `isConfirm: 0`; removing `is
 <sub>Built for the terminal</sub>
 
 </div>
+
 
 
 
