@@ -11,23 +11,13 @@ OTP login · balances · plans · subscriptions · free SMS
 
 </div>
 
-## Get started
+## Installation
 
-Download the [Windows release](https://github.com/rohityadav-sas/ncell-cli/releases/latest), extract the ZIP, and run `ncell.exe` from a terminal. See the [changelog](CHANGELOG.md).
+**WinGet (Windows)**
 
-To build from source, install [stable Rust](https://rustup.rs/), then:
-
-```sh
-git clone https://github.com/rohityadav-sas/ncell-cli.git
-cd ncell-cli
-cargo install --path . --locked
-ncell login 98XXXXXXXX
-ncell balance
+```powershell
+winget install --id RohitYadav.NcellCLI --exact
 ```
-
-No Android device is needed. Tokens are saved in your native credential store; Linux requires an unlocked Secret Service provider.
-
-## Package managers
 
 **Scoop (Windows)**
 
@@ -36,14 +26,12 @@ scoop bucket add ncell-cli https://github.com/rohityadav-sas/ncell-cli
 scoop install ncell-cli/ncell-cli
 ```
 
-**Homebrew (macOS / Linux, builds from source)**
+**Homebrew (macOS / Linux)**
 
 ```sh
 brew tap rohityadav-sas/ncell-cli https://github.com/rohityadav-sas/ncell-cli
 brew install rohityadav-sas/ncell-cli/ncell-cli
 ```
-
-WinGet [submission #450764](https://github.com/microsoft/winget-pkgs/pull/450764) is pending for `RohitYadav.NcellCLI`; it is not yet available in the community source. crates.io publishing is pending authentication. See the [packaging guide](packaging/README.md).
 
 ## A few commands
 

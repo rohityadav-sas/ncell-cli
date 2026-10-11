@@ -330,8 +330,7 @@
                 <a class="card" href="#installation"><span class="icon-tile"><svg class="ico" aria-hidden="true">
                             <use href="#i-download" />
                         </svg></span><span><span class="card-title">Installation</span><span class="card-text">Install
-                            with Cargo or download the Windows
-                            release.</span></span></a>
+                            with WinGet, Scoop or Homebrew.</span></span></a>
                 <a class="card" href="#login"><span class="icon-tile"><svg class="ico" aria-hidden="true">
                             <use href="#i-log-in" />
                         </svg></span><span><span class="card-title">Authentication</span><span class="card-text">Sign in with an SMS OTP.</span></span></a>
@@ -363,51 +362,14 @@
 986   28 Day: 300 All Net SMS   Rs. 98    28 DAY</code></pre>
 
             <h2 id="installation">Installation</h2>
-            <p>
-                Install <a href="https://rustup.rs/">stable Rust</a> and
-                Git. Clone the repository and install the executable on your
-                PATH:
-            </p>
-            <pre data-lang="Shell"><code>git clone https://github.com/rohityadav-sas/ncell-cli.git
-cd ncell-cli
-cargo install --path . --locked
-ncell --help</code></pre>
-            <p>
-                Prefer a prebuilt executable? Download the
-                <a href="https://github.com/rohityadav-sas/ncell-cli/releases/latest">Windows x86_64 release</a>,
-                extract the ZIP, and run
-                <code>.\ncell.exe --help</code> in a terminal from the
-                extracted directory. Add that directory to your PATH if you
-                want to run it anywhere. macOS and Linux currently build
-                from source.
-            </p>
-
-            <h3 id="installation-packages">Package managers</h3>
-            <p>
-                <strong>Scoop · Windows</strong> — use this repository as a
-                custom bucket:
-            </p>
+            <h3 id="installation-winget">WinGet · Windows</h3>
+            <pre data-lang="PowerShell"><code>winget install --id RohitYadav.NcellCLI --exact</code></pre>
+            <h3 id="installation-scoop">Scoop · Windows</h3>
             <pre data-lang="PowerShell"><code>scoop bucket add ncell-cli https://github.com/rohityadav-sas/ncell-cli
 scoop install ncell-cli/ncell-cli</code></pre>
-            <p>
-                <strong>Homebrew · macOS / Linux</strong> — use the custom
-                tap. This builds from source:
-            </p>
+            <h3 id="installation-homebrew">Homebrew · macOS / Linux</h3>
             <pre data-lang="Shell"><code>brew tap rohityadav-sas/ncell-cli https://github.com/rohityadav-sas/ncell-cli
 brew install rohityadav-sas/ncell-cli/ncell-cli</code></pre>
-            <p>
-                <strong>WinGet</strong> —
-                <a href="https://github.com/microsoft/winget-pkgs/pull/450764">submission #450764</a>
-                is pending. The command below works only after acceptance
-                into the community source:
-            </p>
-            <pre data-lang="PowerShell"><code>winget install --id RohitYadav.NcellCLI --exact</code></pre>
-            <p>
-                <strong>Cargo</strong> — crates.io publishing is pending.
-                Install directly from Git for now:
-            </p>
-            <pre
-                data-lang="Shell"><code>cargo install --git https://github.com/rohityadav-sas/ncell-cli --locked</code></pre>
 
             <h2 id="login">Authentication</h2>
             <p>Sign in with an OTP:</p>
