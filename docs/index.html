@@ -299,9 +299,6 @@
             <a href="#sessions"><svg class="ico" aria-hidden="true">
                     <use href="#i-refresh-cw" />
                 </svg><span>Sessions and token refresh</span></a>
-            <a href="#import"><svg class="ico" aria-hidden="true">
-                    <use href="#i-upload" />
-                </svg><span>Import a session</span></a>
             <a href="#errors"><svg class="ico" aria-hidden="true">
                     <use href="#i-wrench" />
                 </svg><span>Troubleshooting</span></a>
@@ -309,7 +306,9 @@
             <a href="#commands"><svg class="ico" aria-hidden="true">
                     <use href="#i-terminal" />
                 </svg><span>Command reference</span></a>
-            <a href="response-codes.html"><svg class="ico" aria-hidden="true"><use href="#i-info" /></svg><span>Response codes</span></a>
+            <a href="response-codes.html"><svg class="ico" aria-hidden="true">
+                    <use href="#i-info" />
+                </svg><span>Response codes</span></a>
             <a href="#protocol"><svg class="ico" aria-hidden="true">
                     <use href="#i-globe" />
                 </svg><span>API and request design</span></a>
@@ -521,121 +520,18 @@ ncell plans --sort validity,price</code></pre>
             <pre data-lang="Shell"><code>ncell plans --category 50
 ncell subscribe --category 50 --id 984</code></pre>
             <p>
-                Use the plan ID from the category list. <code>--id</code> is required;
+                Use the category ID from the category list. <code>--id</code> is required;
                 <code>--category</code> defaults to 66.
             </p>
-            <p>
-                The CLI fetches current plan metadata, including
-                subscription code, name and price, then submits the
-                subscription using the saved login device ID. Successful
-                plain output is
-                <code>Subscribed to &lt;plan name&gt;.</code> Use
-                <code>--json</code> for the complete subscription response.
-            </p>
-            <p>
-                HTTP success with billing code <code>BIL1000</code> is
-                recognized as success, even when
-                <code>responseCode</code> is <code>00</code>. Network and
-                business errors are not automatically retried; explicit
-                token expiry can trigger the one-time authenticated refresh
-                workflow.
-            </p>
-            <p>
-                If a request times out, check balances or the app before
-                manually submitting it again. The operation may have reached
-                the server.
-            </p>
 
-            <h2 id="sms">Free SMS</h2>
-            <pre data-lang="Shell"><code>ncell send-free-sms 98XXXXXXXX "Hello"
-ncell send-free-sms 98XXXXXXXX "Hello" --json</code></pre>
-            <p>
-                The recipient must be a ten-digit Nepal mobile number,
-                optionally prefixed with <code>+977</code>. Message text
-                must not be blank. Eligibility and remaining free SMS
-                allowance are controlled by Ncell.
-            </p>
-            <p>
-                Plain success output is
-                <code>SMS sent to &lt;number&gt;.</code> JSON returns the
-                server response. The CLI checks the inner SMS status,
-                because an outer successful response code does not always
-                mean the message was sent.
-            </p>
-            <p>
-                Business and network failures do not trigger a resend. An
-                explicit expired-access-token rejection can trigger one
-                refresh and retry.
-            </p>
-
-            <h2 id="json">JSON output and scripting</h2>
-            <pre data-lang="Shell"><code>ncell --json balance
-ncell plans --category 50 --sort price --json
-ncell profile --json</code></pre>
-            <p>
-                <code>--json</code> is global and works before or after any
-                command. It changes output formatting, not whether the
-                command buys a pack, sends an SMS or changes the session.
-            </p>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Result</th>
-                            <th>Output</th>
-                            <th>Exit status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Success</td>
-                            <td>JSON on stdout</td>
-                            <td>0</td>
-                        </tr>
-                        <tr>
-                            <td>Ncell rejection</td>
-                            <td>Full server JSON on stdout</td>
-                            <td>Nonzero</td>
-                        </tr>
-                        <tr>
-                            <td>Local or network error</td>
-                            <td>JSON error on stderr</td>
-                            <td>Nonzero</td>
-                        </tr>
-                        <tr>
-                            <td>Argument errors / help</td>
-                            <td>Clap's standard formatting</td>
-                            <td>Depends on invocation</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <p>
-                Balance and profile return their response object. Catalog
-                and subscription commands preserve their server response.
-                Local commands, login and refresh return operation status
-                without exposing tokens. OTP prompts remain interactive and
-                outside JSON stdout.
-            </p>
-
-            <h3 id="json-powershell">PowerShell example</h3>
-            <pre data-lang="PowerShell"><code>$raw = ncell plans --category 50 --json
-if ($LASTEXITCODE -eq 0) {
-    $catalog = $raw | ConvertFrom-Json
-    $catalog.availablePackages
-}</code></pre>
-            <p>
-                Check the exit status before treating JSON as a successful
-                result. Server rejection JSON has a different structure from
-                the successful catalog.
-            </p>
+            <h2 id="sms">Send Free SMS</h2>
+            <pre data-lang="Shell"><code>ncell send-free-sms 98XXXXXXXX "Hello"</code></pre>
 
             <h2 id="sessions">Sessions and token refresh</h2>
             <p>
                 Tokens and device identity are stored under service
                 <code>ncell-cli</code>, entry <code>session</code>, in your
-                platform's native credential store. OTPs are not persisted.
-                There is no plaintext storage fallback.
+                platform's native credential store.
             </p>
 
             <h3 id="sessions-auto">Automatic refresh</h3>
@@ -648,87 +544,16 @@ if ($LASTEXITCODE -eq 0) {
                     The saved refresh token and matching device ID are used
                     to refresh.
                 </li>
-                <li>
-                    New tokens are saved before the original operation is
-                    retried once.
-                </li>
             </ol>
-            <p>
-                A failed refresh preserves the previous session and stops. A
-                second expiry response is returned without looping. Other
-                authentication, business and network errors are not
-                replayed. Automatic refresh applies to balance, profile,
-                plans, search, subscriptions and free SMS.
-            </p>
 
             <h3 id="sessions-manual">Manual refresh</h3>
-            <pre data-lang="Shell"><code>ncell refresh
-ncell refresh --json</code></pre>
-            <p>
-                The CLI saves the new access token and any new refresh token
-                returned by the server. If no replacement refresh token is
-                returned, the existing one is retained. A missing saved
-                refresh token requires login again.
-            </p>
-            <div class="callout callout-note" role="note">
-                <svg class="ico" aria-hidden="true">
-                    <use href="#i-info" />
-                </svg>
-                <div>
-                    <p class="callout-title">Note</p>
-                    <p>
-                        If the mobile app and CLI share a login, token
-                        rotation can invalidate the app's old tokens.
-                        Synchronize the new tokens before using that shared
-                        session again. The CLI does not synchronize
-                        automatically.
-                    </p>
-                </div>
-            </div>
+            <pre data-lang="Shell"><code>ncell refresh</code></pre>
 
-            <h2 id="import">Import a session</h2>
-            <p>
-                <code>import-session</code> reads JSON from standard input.
-                The device ID must match the login that produced the tokens.
-            </p>
-            <pre data-lang="JSON"><code>{
-  "device_id": "&lt;matching login device ID&gt;",
-  "account": {
-    "msisdn": "&lt;10-digit number&gt;",
-    "access_token": "&lt;access token&gt;",
-    "refresh_token": "&lt;refresh token&gt;",
-    "authenticated_at": "&lt;ISO UTC timestamp&gt;"
-  }
-}</code></pre>
-            <pre data-lang="Shell"><code># PowerShell
-Get-Content -Raw session.json | ncell import-session
-
-# Unix shell
-ncell import-session &lt; session.json</code></pre>
-            <p>
-                Keep any session files private. Normal login writes directly
-                to the system keyring.
-            </p>
-
-            <h3 id="import-android">Local Android bridge (optional)</h3>
-            <pre data-lang="PowerShell"><code>.\sync_token.ps1 mobile-to-cli
-.\sync_token.ps1 cli-to-mobile</code></pre>
-            <p>
-                The Windows bridge script and its sibling
-                <code>../bypass/scripts/pull_tokens.ps1</code> /
-                <code>push_tokens.ps1</code> helpers are local tools and are
-                not included in the repository. They require the separately
-                configured rooted Android device, adb and Python setup, plus
-                a release CLI build.
-            </p>
-            <p>
-                Mobile import preserves the number and device ID. Pushing
-                tokens restarts the app through the helper. Neither
-                direction requests an OTP or refreshes tokens.
-            </p>
 
             <h2 id="errors">Troubleshooting</h2>
-            <p>API errors show the HTTP status, response code and its known meaning. See the <a href="response-codes.html">full response-code reference</a>. Unmapped meanings are marked unconfirmed or unavailable; use <code>--json</code> for the complete server response.</p>
+            <p>API errors show the HTTP status, response code and its known meaning. See the <a
+                    href="response-codes.html">full response-code reference</a>. Unmapped meanings are marked
+                unconfirmed or unavailable; use <code>--json</code> for the complete server response.</p>
             <pre data-lang="Shell"><code>ncell doctor</code></pre>
             <p>
                 Doctor makes a HEAD request without submitting a number,
@@ -922,10 +747,6 @@ ncell import-session &lt; session.json</code></pre>
                         <tr>
                             <td><code>refresh</code></td>
                             <td>Rotate saved tokens</td>
-                        </tr>
-                        <tr>
-                            <td><code>import-session</code></td>
-                            <td>Read session JSON from stdin</td>
                         </tr>
                     </tbody>
                 </table>

@@ -3,7 +3,7 @@ use ncell_cli::{
     api::Client,
     auth::{AuthService, normalize_number},
     error::{Error, Result},
-    session::{Account, KeyringStore, Session, SessionStore},
+    session::{Account, KeyringStore, SessionStore},
 };
 use serde_json::{Value, json};
 
@@ -67,8 +67,6 @@ enum Command {
         #[arg(long, default_value_t = 66)]
         category: u64,
     },
-    /// Import a session JSON from stdin into the system credential store.
-    ImportSession,
     /// Rotate saved tokens. Synchronize them to any app sharing this session.
     Refresh,
 }
@@ -349,21 +347,6 @@ pub fn run(args: Args) -> Result<()> {
                 }
             }
         }
-        Command::ImportSession => {
-            let mut session: Session =
-                serde_json::from_reader(std::io::stdin()).map_err(|_| Error::InvalidSession)?;
-            let account = session.account.as_mut().ok_or(Error::InvalidSession)?;
-            account.msisdn = normalize_number(&account.msisdn)?.into();
-            if session.device_id.is_empty() || account.access_token.trim().is_empty() {
-                return Err(Error::InvalidSession);
-            }
-            KeyringStore::new()?.save(&session)?;
-            output(
-                args.json,
-                json!({"session_imported": true}),
-                "Session imported into your system credential store.",
-            );
-        }
         Command::Search { .. } => unreachable!(),
     }
     Ok(())
@@ -446,7 +429,6 @@ mod tests {
             vec!["plans", "--list-categories"],
             vec!["subscribe", "--id", "1225"],
             vec!["refresh"],
-            vec!["import-session"],
         ] {
             let args =
                 Args::try_parse_from(std::iter::once("ncell").chain(command).chain(["--json"]))

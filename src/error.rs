@@ -28,7 +28,7 @@ pub enum Error {
     InvalidSession,
     #[error("No pending OTP for this number; run `ncell login <number>` first")]
     NoPendingLogin,
-    #[error("No saved account. Run `ncell login <number>` or import the current app session")]
+    #[error("No saved account. Run `ncell login <number>`")]
     NotLoggedIn,
     #[error("Could not read the OTP from the terminal")]
     Prompt,
