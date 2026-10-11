@@ -59,6 +59,18 @@ cargo install --path . --locked
 ncell --help
 ```
 
-**Prebuilt Windows executable**
+**Prebuilt binaries**
 
-Download the [Windows x86_64 release](https://github.com/rohityadav-sas/ncell-cli/releases/latest), extract the ZIP, and run `.\ncell.exe --help` from the extracted directory. Add that directory to your `PATH` to run it anywhere.
+Download a ZIP from [Releases](https://github.com/rohityadav-sas/ncell-cli/releases/latest) for your platform:
+
+| Platform | Architecture | Archive suffix |
+| --- | --- | --- |
+| Windows | x64 | `windows-x86_64.zip` |
+| Linux | x64 | `linux-x86_64.zip` |
+| Linux | ARM64 | `linux-arm64.zip` |
+| macOS | Intel | `macos-x86_64.zip` |
+| macOS | Apple Silicon | `macos-arm64.zip` |
+
+Extract the ZIP and run `ncell --help` (`.\ncell.exe --help` on Windows). On Linux and macOS, run `chmod +x ncell` first, then `./ncell --help`. Add the executable's directory to your `PATH` to run it anywhere.
+
+Linux credential storage requires an unlocked Secret Service provider, such as GNOME Keyring or KWallet with Secret Service enabled.

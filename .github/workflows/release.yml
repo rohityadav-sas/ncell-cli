@@ -1,0 +1,64 @@
+name: Release binaries
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag
+        required: true
+        default: v0.1.0
+permissions:
+  contents: write
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x86_64
+            binary: ncell.exe
+          - os: ubuntu-22.04
+            platform: linux-x86_64
+            binary: ncell
+          - os: ubuntu-22.04-arm
+            platform: linux-arm64
+            binary: ncell
+          - os: macos-15-intel
+            platform: macos-x86_64
+            binary: ncell
+          - os: macos-15
+            platform: macos-arm64
+            binary: ncell
+    runs-on: ${{ matrix.os }}
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release --locked
+      - name: Check executable
+        shell: bash
+        run: |
+          target/release/${{ matrix.binary }} --version
+          target/release/${{ matrix.binary }} --help
+      - name: Package ZIP
+        shell: python
+        run: |
+          import os, zipfile
+          from pathlib import Path
+          name = f"ncell-cli-{os.environ['TAG']}-${{ matrix.platform }}.zip"
+          with zipfile.ZipFile(name, 'w', zipfile.ZIP_DEFLATED) as archive:
+              archive.write('target/release/${{ matrix.binary }}', '${{ matrix.binary }}')
+              archive.write('LICENSE', 'LICENSE')
+      - name: Publish archive
+        shell: bash
+        run: |
+          asset="ncell-cli-${TAG}-${{ matrix.platform }}.zip"
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$asset"; then
+            gh release upload "$TAG" "$asset" --repo "$GITHUB_REPOSITORY"
+          fi
