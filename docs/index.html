@@ -1,61 +1,323 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="The complete ncell-cli guide: install, sign in, query balances, search plans, subscribe and automate with JSON.">
-<meta name="theme-color" content="#652d91"><title>ncell-cli — Documentation</title>
-<link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css"><script src="app.js" defer></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ncell-cli documentation</title>
+<meta name="description" content="Documentation for ncell-cli: install, sign in, query balances, search plans, subscribe and automate with JSON.">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#100e15" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script>
+  (function () {
+    var theme;
+    try { theme = localStorage.getItem('ncell-docs-theme'); } catch (e) {}
+    if (theme !== 'light' && theme !== 'dark') {
+      theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    document.documentElement.dataset.theme = theme;
+  })();
+</script>
+<noscript>
+<style>
+  .search-btn, .menu-btn, .theme-btn, .copy-btn { display: none !important; }
+  @media (max-width: 900px) {
+    #sidebar { display: block; position: static; width: auto; max-width: none; border: 0; box-shadow: none; }
+    main { padding-top: 16px; }
+  }
+</style>
+</noscript>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- Icons: Lucide (ISC license) and GitHub mark from Octicons (MIT license), inlined as an SVG sprite. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="i-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34" /><circle cx="11" cy="11" r="8" /></symbol>
+<symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 5h16" /><path d="M4 12h16" /><path d="M4 19h16" /></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401" /></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></symbol>
+<symbol id="i-terminal" viewBox="0 0 24 24"><path d="M12 19h8" /><path d="m4 17 6-6-6-6" /></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></symbol>
+<symbol id="i-triangle-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" /></symbol>
+<symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></symbol>
+<symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7" /><path d="M12 19V5" /></symbol>
+<symbol id="i-arrow-down" viewBox="0 0 24 24"><path d="M12 5v14" /><path d="m19 12-7 7-7-7" /></symbol>
+<symbol id="i-corner-down-left" viewBox="0 0 24 24"><path d="M20 4v7a4 4 0 0 1-4 4H4" /><path d="m9 10-5 5 5 5" /></symbol>
+<symbol id="i-hash" viewBox="0 0 24 24"><line x1="4" x2="20" y1="9" y2="9" /><line x1="4" x2="20" y1="15" y2="15" /><line x1="10" x2="8" y1="3" y2="21" /><line x1="16" x2="14" y1="3" y2="21" /></symbol>
+<symbol id="i-file-text" viewBox="0 0 24 24"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /><path d="M14 2v5a1 1 0 0 0 1 1h5" /><path d="M10 9H8" /><path d="M16 13H8" /><path d="M16 17H8" /></symbol>
+<symbol id="i-book-open" viewBox="0 0 24 24"><path d="M12 5v16" /><path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z" /></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 15V3" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /></symbol>
+<symbol id="i-log-in" viewBox="0 0 24 24"><path d="m10 17 5-5-5-5" /><path d="M15 12H3" /><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /></symbol>
+<symbol id="i-wallet" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1" /><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" /></symbol>
+<symbol id="i-tag" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" /><circle cx="7.5" cy="7.5" r=".5" fill="currentColor" /></symbol>
+<symbol id="i-list-filter" viewBox="0 0 24 24"><path d="M2 5h20" /><path d="M6 12h12" /><path d="M9 19h6" /></symbol>
+<symbol id="i-credit-card" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /><path d="M6 14h2" /></symbol>
+<symbol id="i-message-square" viewBox="0 0 24 24"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" /></symbol>
+<symbol id="i-braces" viewBox="0 0 24 24"><path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1" /><path d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1" /></symbol>
+<symbol id="i-refresh-cw" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 3v12" /><path d="m17 8-5-5-5 5" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /></symbol>
+<symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" /></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" /><path d="M2 12h20" /></symbol>
+<symbol id="i-code-xml" viewBox="0 0 24 24"><path d="m18 16 4-4-4-4" /><path d="m6 8-4 4 4 4" /><path d="m14.5 4-5 16" /></symbol>
+<symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /><path d="m9 12 2 2 4-4" /></symbol>
+<symbol id="i-smartphone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2" /><path d="M12 18h.01" /></symbol>
+<symbol id="i-table-2" viewBox="0 0 24 24"><path d="M3 9h18" /><path d="M9 3v18" /><rect x="3" y="3" width="18" height="18" rx="2" /></symbol>
+<symbol id="i-github" viewBox="0 0 16 16"><path d="M6.766 11.328c-2.063-.25-3.516-1.734-3.516-3.656 0-.781.281-1.625.75-2.188-.203-.515-.172-1.609.063-2.062.625-.078 1.468.25 1.968.703.594-.187 1.219-.281 1.985-.281.765 0 1.39.094 1.953.265.484-.437 1.344-.765 1.969-.687.218.422.25 1.515.046 2.047.5.593.766 1.39.766 2.203 0 1.922-1.453 3.375-3.547 3.64.531.344.89 1.094.89 1.954v1.625c0 .468.391.734.86.547C13.781 14.359 16 11.53 16 8.03 16 3.61 12.406 0 7.984 0 3.563 0 0 3.61 0 8.031a7.88 7.88 0 0 0 5.172 7.422c.422.156.828-.125.828-.547v-1.25c-.219.094-.5.156-.75.156-1.031 0-1.64-.562-2.078-1.609-.172-.422-.36-.672-.719-.719-.187-.015-.25-.093-.25-.187 0-.188.313-.328.625-.328.453 0 .844.281 1.25.86.313.452.64.655 1.031.655s.641-.14 1-.5c.266-.265.47-.5.657-.656"/></symbol></svg>
 <a class="skip" href="#content">Skip to content</a>
-<header class="topbar"><a class="brand" href="#overview"><span class="mark">&gt;_</span> ncell<span>-cli</span><small>DOCS</small></a><div class="top-actions"><a href="https://github.com/rohityadav-sas/ncell-cli">GitHub ↗</a><button id="theme" aria-label="Switch color theme">◐</button><button id="menu" aria-label="Toggle navigation" aria-expanded="false" aria-controls="sidebar">☰</button></div></header>
-<aside id="sidebar"><label class="search-label" for="search">Find a guide</label><div class="search-box"><span aria-hidden="true">⌕</span><input type="search" id="search" placeholder="Search documentation…" autocomplete="off"><kbd>/</kbd></div><nav aria-label="Documentation"><p class="nav-label">START HERE</p><a href="#overview">Overview</a><a href="#installation">Installation</a><a href="#login">Login &amp; OTP</a><p class="nav-label">YOUR ACCOUNT</p><a href="#balance">Balance &amp; profile</a><a href="#plans">Plans &amp; tags</a><a href="#searching">Search &amp; sorting</a><a href="#subscribe">Subscribe to a pack</a><a href="#sms">Free SMS</a><p class="nav-label">WORKFLOWS</p><a href="#json">JSON &amp; scripting</a><a href="#sessions">Sessions &amp; refresh</a><a href="#import">Import &amp; Android bridge</a><a href="#errors">Troubleshooting</a><p class="nav-label">REFERENCE</p><a href="#commands">Command reference</a><a href="#protocol">API &amp; request design</a><a href="#development">Development</a></nav><div class="sidebar-foot"><span class="dot"></span> Written in Rust <span>v0.1.0</span></div></aside>
-<main id="content">
-<div class="breadcrumb">Documentation <span>/</span> ncell-cli</div>
-<div id="search-info" role="status" hidden></div>
-<section id="overview" class="hero"><div class="eyebrow"><span class="dot"></span> YOUR ACCOUNT. YOUR TERMINAL.</div><h1>Less ceremony.<br><span>More command line.</span></h1><p class="lead">Your Ncell account, one command away. A small Rust CLI for OTP login, balances, plans, subscriptions and free SMS.</p><div class="hero-actions"><a class="primary" href="#installation">Get started <span>→</span></a><a class="secondary" href="#commands">Explore commands</a></div><div class="terminal"><div class="terminal-bar"><i></i><i></i><i></i><span>~/ncell-cli</span><small>EXAMPLE</small></div><pre><code><span class="prompt">❯</span> ncell search "SMS" --tag 50 --sort price
 
-<span class="muted">ID    Plan                          Price   Validity</span>
-984   1 Day: 100 All Net SMS         Rs. 15  1 DAY
-985   7 Day: 300 All Net SMS         Rs. 45  7 DAY
-986   28 Day: 300 All Net SMS        Rs. 98  28 DAY</code></pre></div><p class="caption">Illustrative output. Offers, prices and eligibility come from Ncell's server.</p><div class="feature-grid"><article><span>01 / SIMPLE</span><h3>One login, fewer steps.</h3><p>SMS OTP, hidden input and a reusable device identity.</p></article><article><span>02 / NATIVE</span><h3>Credentials stay local.</h3><p>Tokens live in your system keyring, with no plaintext fallback.</p></article><article><span>03 / SCRIPTABLE</span><h3>Human or machine.</h3><p>Readable tables by default. Structured JSON when you need it.</p></article></div><div class="notice">An independent project for Ncell Nepal. Not affiliated with or endorsed by Ncell.</div></section>
-<section id="installation"><div class="section-label">01 — START HERE</div><h2>Up and running.</h2><p>Install <a href="https://rustup.rs/">stable Rust</a> and Git. Clone the repository and install the executable on your PATH:</p><pre><code>git clone https://github.com/rohityadav-sas/ncell-cli.git
+<header class="header">
+  <div class="header-inner">
+    <button id="menu-btn" class="icon-btn menu-btn" type="button" aria-label="Toggle navigation" aria-expanded="false" aria-controls="sidebar"><svg class="ico" aria-hidden="true"><use href="#i-menu"/></svg></button>
+    <a class="brand" href="#overview">
+      <svg width="28" height="28" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#702da0"/><path d="m17 20 13 12-13 12m23 0h10" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>ncell-cli</span>
+    </a>
+    <span class="version">v0.1.0</span>
+    <div class="header-center">
+      <button id="search-btn" class="search-btn" type="button" aria-label="Search documentation" aria-keyshortcuts="/">
+        <svg class="ico" aria-hidden="true"><use href="#i-search"/></svg>
+        <span class="search-text">Search documentation</span>
+        <kbd>/</kbd>
+      </button>
+    </div>
+    <div class="header-actions">
+      <a class="icon-btn" href="https://github.com/rohityadav-sas/ncell-cli" aria-label="ncell-cli on GitHub"><svg class="ico ico-fill" aria-hidden="true"><use href="#i-github"/></svg></a>
+      <button id="theme-btn" class="icon-btn theme-btn" type="button" aria-label="Switch theme"><svg class="ico icon-moon" aria-hidden="true"><use href="#i-moon"/></svg><svg class="ico icon-sun" aria-hidden="true"><use href="#i-sun"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<div id="scrim" class="scrim" hidden></div>
+
+<aside id="sidebar">
+  <nav aria-label="Documentation">
+    <p class="nav-title">Getting started</p>
+    <a href="#overview"><svg class="ico" aria-hidden="true"><use href="#i-book-open"/></svg><span>Overview</span></a>
+    <a href="#installation"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg><span>Installation</span></a>
+    <a href="#login"><svg class="ico" aria-hidden="true"><use href="#i-log-in"/></svg><span>Authentication</span></a>
+    <p class="nav-title">Account</p>
+    <a href="#balance"><svg class="ico" aria-hidden="true"><use href="#i-wallet"/></svg><span>Balance and profile</span></a>
+    <a href="#plans"><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg><span>Plans and tags</span></a>
+    <a href="#searching"><svg class="ico" aria-hidden="true"><use href="#i-list-filter"/></svg><span>Search and sorting</span></a>
+    <a href="#subscribe"><svg class="ico" aria-hidden="true"><use href="#i-credit-card"/></svg><span>Subscribe to a plan</span></a>
+    <a href="#sms"><svg class="ico" aria-hidden="true"><use href="#i-message-square"/></svg><span>Free SMS</span></a>
+    <p class="nav-title">Guides</p>
+    <a href="#json"><svg class="ico" aria-hidden="true"><use href="#i-braces"/></svg><span>JSON output and scripting</span></a>
+    <a href="#sessions"><svg class="ico" aria-hidden="true"><use href="#i-refresh-cw"/></svg><span>Sessions and token refresh</span></a>
+    <a href="#import"><svg class="ico" aria-hidden="true"><use href="#i-upload"/></svg><span>Import a session</span></a>
+    <a href="#errors"><svg class="ico" aria-hidden="true"><use href="#i-wrench"/></svg><span>Troubleshooting</span></a>
+    <p class="nav-title">Reference</p>
+    <a href="#commands"><svg class="ico" aria-hidden="true"><use href="#i-terminal"/></svg><span>Command reference</span></a>
+    <a href="#protocol"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg><span>API and request design</span></a>
+    <a href="#development"><svg class="ico" aria-hidden="true"><use href="#i-code-xml"/></svg><span>Development</span></a>
+  </nav>
+</aside>
+
+<main>
+<article id="content">
+<figure class="doc-banner"><picture><source media="(max-width: 540px)" srcset="assets/banner-mobile.svg"><img src="assets/banner.svg" width="1200" height="360" alt="ncell-cli — Your Ncell account, one command away. Written in Rust. For Ncell Nepal."></picture></figure>
+<h1 id="overview">ncell-cli</h1>
+<p class="lead">A command-line client for Ncell Nepal self-care, written in Rust. It supports OTP login, balance and profile queries, plan search, subscriptions and free SMS.</p>
+<ul class="badges" aria-label="Project details"><li>v0.1.0</li><li>Written in Rust</li><li>MIT licensed</li></ul>
+<div class="actions">
+  <a class="btn btn-secondary download-btn" href="https://github.com/rohityadav-sas/ncell-cli/releases/latest"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg><span>Download v0.1.0</span></a>
+  <a class="btn btn-primary" href="#installation"><span>Get started</span><svg class="ico" aria-hidden="true"><use href="#i-arrow-right"/></svg></a>
+  <a class="btn btn-secondary" href="https://github.com/rohityadav-sas/ncell-cli"><svg class="ico ico-fill" aria-hidden="true"><use href="#i-github"/></svg><span>View on GitHub</span></a>
+</div>
+<nav class="cards" aria-label="Popular topics">
+<a class="card" href="#installation"><span class="icon-tile"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg></span><span><span class="card-title">Installation</span><span class="card-text">Install with Cargo or download the Windows release.</span></span></a>
+<a class="card" href="#login"><span class="icon-tile"><svg class="ico" aria-hidden="true"><use href="#i-log-in"/></svg></span><span><span class="card-title">Authentication</span><span class="card-text">Sign in with an SMS one-time password.</span></span></a>
+<a class="card" href="#plans"><span class="icon-tile"><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg></span><span><span class="card-title">Plans and tags</span><span class="card-text">Browse catalogs and find the right pack.</span></span></a>
+<a class="card" href="#subscribe"><span class="icon-tile"><svg class="ico" aria-hidden="true"><use href="#i-credit-card"/></svg></span><span><span class="card-title">Subscribe to a plan</span><span class="card-text">Activate a listed pack from the command line.</span></span></a>
+<a class="card" href="#json"><span class="icon-tile"><svg class="ico" aria-hidden="true"><use href="#i-braces"/></svg></span><span><span class="card-title">JSON output and scripting</span><span class="card-text">Structured output for scripts and automation.</span></span></a>
+<a class="card" href="#commands"><span class="icon-tile"><svg class="ico" aria-hidden="true"><use href="#i-terminal"/></svg></span><span><span class="card-title">Command reference</span><span class="card-text">Every command and option at a glance.</span></span></a>
+</nav>
+
+<h2 id="features">Features</h2>
+<div class="features">
+<div class="feature"><span class="icon-tile"><svg class="ico" aria-hidden="true"><use href="#i-smartphone"/></svg></span><div><h3>Simple login</h3><p>SMS OTP with hidden input and a reusable device identity.</p></div></div>
+<div class="feature"><span class="icon-tile"><svg class="ico" aria-hidden="true"><use href="#i-shield-check"/></svg></span><div><h3>Local credentials</h3><p>Tokens are stored in your system keyring, with no plaintext fallback.</p></div></div>
+<div class="feature"><span class="icon-tile"><svg class="ico" aria-hidden="true"><use href="#i-table-2"/></svg></span><div><h3>Human and machine output</h3><p>Readable tables by default, structured JSON with <code>--json</code>.</p></div></div>
+</div>
+
+<h2 id="example">Example</h2>
+<pre data-lang="Shell"><code>ncell search "SMS" --tag 50 --sort price</code></pre>
+<pre data-lang="Output"><code>ID    Plan                      Price     Validity
+984   1 Day: 100 All Net SMS    Rs. 15    1 DAY
+985   7 Day: 300 All Net SMS    Rs. 45    7 DAY
+986   28 Day: 300 All Net SMS   Rs. 98    28 DAY</code></pre>
+<p class="caption">Illustrative output. Offers, prices and eligibility come from Ncell's server.</p>
+<div class="callout callout-note" role="note"><svg class="ico" aria-hidden="true"><use href="#i-info"/></svg><div><p class="callout-title">Note</p><p>ncell-cli is an independent project for Ncell Nepal. It is not affiliated with or endorsed by Ncell.</p></div></div>
+
+<h2 id="installation">Installation</h2>
+<p>Install <a href="https://rustup.rs/">stable Rust</a> and Git. Clone the repository and install the executable on your PATH:</p>
+<pre data-lang="Shell"><code>git clone https://github.com/rohityadav-sas/ncell-cli.git
 cd ncell-cli
 cargo install --path . --locked
-ncell --help</code></pre><p>Prefer a prebuilt executable? Download the <a href="https://github.com/rohityadav-sas/ncell-cli/releases/latest">Windows x86_64 release</a>, extract the ZIP, and run <code>.\ncell.exe --help</code> in a terminal from the extracted directory. Add that directory to your PATH if you want to run it anywhere. macOS and Linux currently build from source.</p><p>No Android phone or root access is needed for normal CLI use. See the <a href="https://github.com/rohityadav-sas/ncell-cli/blob/main/CHANGELOG.md">changelog</a> for release history.</p><h3>Package managers</h3><p><strong>Scoop · Windows</strong> — add this repository as a custom bucket:</p><pre><code>scoop bucket add ncell-cli https://github.com/rohityadav-sas/ncell-cli
-scoop install ncell-cli/ncell-cli</code></pre><p><strong>Homebrew · macOS / Linux</strong> — add this repository as a custom tap and build from source:</p><pre><code>brew tap rohityadav-sas/ncell-cli https://github.com/rohityadav-sas/ncell-cli
-brew install rohityadav-sas/ncell-cli/ncell-cli</code></pre><p><strong>WinGet</strong> — <a href="https://github.com/microsoft/winget-pkgs/pull/450764">submission #450764</a> is pending review and the owner's CLA acceptance. <code>winget install --id RohitYadav.NcellCLI --exact</code> will work only after the package is accepted into the community source.</p><p><strong>Cargo</strong> — crates.io publishing is pending owner authentication. For now, install directly from Git:</p><pre><code>cargo install --git https://github.com/rohityadav-sas/ncell-cli --locked</code></pre><p>The project is MIT licensed. See the <a href="https://github.com/rohityadav-sas/ncell-cli/blob/main/packaging/README.md">packaging guide</a> for validation status and publishing details.</p><h3>Build without installing</h3><pre><code>cargo build --release --locked</code></pre><div class="table-wrap"><table><thead><tr><th>Platform</th><th>Executable</th><th>Credential storage</th></tr></thead><tbody><tr><td>Windows</td><td><code>.\target\release\ncell.exe</code></td><td>Credential Manager</td></tr><tr><td>macOS</td><td><code>./target/release/ncell</code></td><td>Keychain</td></tr><tr><td>Linux</td><td><code>./target/release/ncell</code></td><td>Secret Service</td></tr></tbody></table></div><p>Linux requires a session D-Bus and an unlocked Secret Service provider, such as GNOME Keyring or KWallet. Headless environments without a credential service are unsupported.</p><h3>Update an existing install</h3><pre><code>git pull
-cargo install --path . --locked --force</code></pre></section>
-<section id="login"><div class="section-label">02 — AUTHENTICATION</div><h2>Sign in with an SMS code.</h2><pre><code>ncell login 98XXXXXXXX</code></pre><p>Use a ten-digit Nepal mobile number, optionally prefixed with <code>+977</code>. The command requests an OTP and prompts for it without echoing the input. The number must be eligible for Ncell self-care login.</p><ol><li>A local device ID is generated or reused, then saved before the OTP request.</li><li>Ncell sends the SMS code. Enter it at <code>Enter OTP:</code>.</li><li>The CLI validates it with the same device ID and saves the returned tokens in your native keyring.</li></ol><h3>Resume instead of resending</h3><pre><code>ncell login 98XXXXXXXX --verify</code></pre><p>Use this after an interruption or mistyped OTP. It resumes the pending login for that number without generating another SMS. For an expired code, run normal login again. There is no automatic OTP resend.</p><div class="notice">Only one account and one pending login are stored. A failed login preserves the previously authenticated account. Run one login process at a time.</div><h3>Inspect or remove the saved session</h3><pre><code>ncell status
-ncell logout</code></pre><p><code>status</code> checks local storage, not server token validity. <code>logout</code> deletes the local session and device ID; it does not revoke tokens on Ncell's server.</p></section>
-<section id="balance"><div class="section-label">03 — ACCOUNT</div><h2>A clear view of your account.</h2><pre><code>ncell balance
+ncell --help</code></pre>
+<p>Prefer a prebuilt executable? Download the <a href="https://github.com/rohityadav-sas/ncell-cli/releases/latest">Windows x86_64 release</a>, extract the ZIP, and run <code>.\ncell.exe --help</code> in a terminal from the extracted directory. Add that directory to your PATH if you want to run it anywhere. macOS and Linux currently build from source.</p>
+<p>No Android phone or root access is needed for normal CLI use. See the <a href="https://github.com/rohityadav-sas/ncell-cli/blob/main/CHANGELOG.md">changelog</a> for release history.</p>
+
+<h3 id="installation-packages">Package managers</h3>
+<p><strong>Scoop · Windows</strong> — use this repository as a custom bucket:</p>
+<pre data-lang="PowerShell"><code>scoop bucket add ncell-cli https://github.com/rohityadav-sas/ncell-cli
+scoop install ncell-cli/ncell-cli</code></pre>
+<p><strong>Homebrew · macOS / Linux</strong> — use the custom tap. This builds from source:</p>
+<pre data-lang="Shell"><code>brew tap rohityadav-sas/ncell-cli https://github.com/rohityadav-sas/ncell-cli
+brew install rohityadav-sas/ncell-cli/ncell-cli</code></pre>
+<p><strong>WinGet</strong> — <a href="https://github.com/microsoft/winget-pkgs/pull/450764">submission #450764</a> is pending. The command below works only after acceptance into the community source:</p>
+<pre data-lang="PowerShell"><code>winget install --id RohitYadav.NcellCLI --exact</code></pre>
+<p><strong>Cargo</strong> — crates.io publishing is pending. Install directly from Git for now:</p>
+<pre data-lang="Shell"><code>cargo install --git https://github.com/rohityadav-sas/ncell-cli --locked</code></pre>
+<p>See the <a href="https://github.com/rohityadav-sas/ncell-cli/blob/main/packaging/README.md">packaging guide</a> for installation checks and publishing details.</p>
+
+<h3 id="installation-build">Build without installing</h3>
+<pre data-lang="Shell"><code>cargo build --release --locked</code></pre>
+<div class="table-wrap"><table>
+  <thead><tr><th>Platform</th><th>Executable</th><th>Credential storage</th></tr></thead>
+  <tbody>
+    <tr><td>Windows</td><td><code>.\target\release\ncell.exe</code></td><td>Credential Manager</td></tr>
+    <tr><td>macOS</td><td><code>./target/release/ncell</code></td><td>Keychain</td></tr>
+    <tr><td>Linux</td><td><code>./target/release/ncell</code></td><td>Secret Service</td></tr>
+  </tbody>
+</table></div>
+<p>Linux requires a session D-Bus and an unlocked Secret Service provider, such as GNOME Keyring or KWallet. Headless environments without a credential service are unsupported.</p>
+
+<h3 id="installation-update">Update an existing install</h3>
+<pre data-lang="Shell"><code>git pull
+cargo install --path . --locked --force</code></pre>
+
+<h2 id="login">Authentication</h2>
+<p>Sign in with an SMS code:</p>
+<pre data-lang="Shell"><code>ncell login 98XXXXXXXX</code></pre>
+<p>Use a ten-digit Nepal mobile number, optionally prefixed with <code>+977</code>. The command requests an OTP and prompts for it without echoing the input. The number must be eligible for Ncell self-care login.</p>
+<ol>
+  <li>A local device ID is generated or reused, then saved before the OTP request.</li>
+  <li>Ncell sends the SMS code. Enter it at <code>Enter OTP:</code>.</li>
+  <li>The CLI validates it with the same device ID and saves the returned tokens in your native keyring.</li>
+</ol>
+
+<h3 id="login-verify">Resume instead of resending</h3>
+<pre data-lang="Shell"><code>ncell login 98XXXXXXXX --verify</code></pre>
+<p>Use this after an interruption or mistyped OTP. It resumes the pending login for that number without generating another SMS. For an expired code, run normal login again. There is no automatic OTP resend.</p>
+<div class="callout callout-note" role="note"><svg class="ico" aria-hidden="true"><use href="#i-info"/></svg><div><p class="callout-title">Note</p><p>Only one account and one pending login are stored. A failed login preserves the previously authenticated account. Run one login process at a time.</p></div></div>
+
+<h3 id="login-session">Inspect or remove the saved session</h3>
+<pre data-lang="Shell"><code>ncell status
+ncell logout</code></pre>
+<p><code>status</code> checks local storage, not server token validity. <code>logout</code> deletes the local session and device ID; it does not revoke tokens on Ncell's server.</p>
+
+<h2 id="balance">Balance and profile</h2>
+<pre data-lang="Shell"><code>ncell balance
 ncell balance --json
 ncell profile
-ncell profile --json</code></pre><p>Balance output summarizes credit, data, voice and SMS. JSON returns the complete balance response object, including details and expiry information supplied by the server.</p><p>Profile output shows the account number, name, SIM type, status, plan and payment mode when provided.</p><div class="table-wrap"><table><thead><tr><th>Profile status</th><th>CLI label</th></tr></thead><tbody><tr><td><code>B01</code></td><td>Active</td></tr><tr><td><code>B03</code></td><td>All Services Blocked</td></tr><tr><td><code>B04</code></td><td>Outgoing Blocked</td></tr><tr><td><code>B02</code> / other</td><td>Shown unchanged; meaning is not confirmed</td></tr></tbody></table></div><p>These labels use the profile's <code>status</code> field. They are different from the local login check performed by <code>ncell status</code>.</p><div class="notice warning">Profile JSON can contain private account details, including PIN/PUK information. Review it before sharing logs or screenshots.</div></section>
-<section id="plans"><div class="section-label">04 — CATALOGS</div><h2>Find the right pack.</h2><pre><code>ncell plans
+ncell profile --json</code></pre>
+<p>Balance output summarizes credit, data, voice and SMS. JSON returns the complete balance response object, including details and expiry information supplied by the server.</p>
+<p>Profile output shows the account number, name, SIM type, status, plan and payment mode when provided.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Profile status</th><th>CLI label</th></tr></thead>
+  <tbody>
+    <tr><td><code>B01</code></td><td>Active</td></tr>
+    <tr><td><code>B03</code></td><td>All Services Blocked</td></tr>
+    <tr><td><code>B04</code></td><td>Outgoing Blocked</td></tr>
+    <tr><td><code>B02</code> / other</td><td>Shown unchanged; meaning is not confirmed</td></tr>
+  </tbody>
+</table></div>
+<p>These labels use the profile's <code>status</code> field. They are different from the local login check performed by <code>ncell status</code>.</p>
+<div class="callout callout-warning" role="note"><svg class="ico" aria-hidden="true"><use href="#i-triangle-alert"/></svg><div><p class="callout-title">Warning</p><p>Profile JSON can contain private account details, including PIN/PUK information. Review it before sharing logs or screenshots.</p></div></div>
+
+<h2 id="plans">Plans and tags</h2>
+<pre data-lang="Shell"><code>ncell plans
 ncell plans --list-tags
 ncell plans --tag 50
 ncell plans --tag 61
-ncell plans --tag 66 --json</code></pre><p>The default tag is <code>66</code>. The CLI lists the current catalog for your account, showing plan ID, name, price and validity. Prices omit a trailing <code>.00</code>; fractional amounts remain intact, and free packs display <code>Free</code>.</p><div class="table-wrap"><table><thead><tr><th>Tag</th><th>Catalog</th></tr></thead><tbody><tr><td>50</td><td>SMS</td></tr><tr><td>61</td><td>Voice</td></tr><tr><td>66</td><td>Data &amp; Voice — default</td></tr></tbody></table></div><p>Use <code>--list-tags</code> for the full, current list. Different categories may use the same label, such as “All Packs”, while their IDs identify different catalogs. An empty tag is possible for an account; a listed tag does not guarantee available offers.</p><p>Non-default tags are resolved from the server's category list. For a tag with multiple categories, data takes priority, followed by voice and SMS. Unknown or unsupported categories return an error. Tag listing cannot be combined with an explicit tag, search or sorting options.</p></section>
-<section id="searching"><div class="section-label">05 — SEARCH &amp; SORT</div><h2>Your catalog, your order.</h2><pre><code>ncell search "SMS" --tag 50
+ncell plans --tag 66 --json</code></pre>
+<p>The default tag is <code>66</code>. The CLI lists the current catalog for your account, showing plan ID, name, price and validity. Prices omit a trailing <code>.00</code>; fractional amounts remain intact, and free packs display <code>Free</code>.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Tag</th><th>Catalog</th></tr></thead>
+  <tbody>
+    <tr><td>50</td><td>SMS</td></tr>
+    <tr><td>61</td><td>Voice</td></tr>
+    <tr><td>66</td><td>Data &amp; Voice (default)</td></tr>
+  </tbody>
+</table></div>
+<p>Use <code>--list-tags</code> for the full, current list. Different categories may use the same label, such as “All Packs”, while their IDs identify different catalogs. An empty tag is possible for an account; a listed tag does not guarantee available offers.</p>
+<p>Non-default tags are resolved from the server's category list. For a tag with multiple categories, data takes priority, followed by voice and SMS. Unknown or unsupported categories return an error. Tag listing cannot be combined with an explicit tag, search or sorting options.</p>
+
+<h2 id="searching">Search and sorting</h2>
+<pre data-lang="Shell"><code>ncell search "SMS" --tag 50
 ncell search "Super" --sort price
-ncell plans --search "Combo" --sort validity:desc,price:asc</code></pre><p>Search sends the keyword to Ncell's catalog endpoint. It is server-side and scoped to the selected tag, not a local text filter or an all-catalog search. Omitting <code>--tag</code> searches tag 66. An empty keyword is rejected; no matches produce an empty catalog.</p><h3>Sort by more than one field</h3><pre><code>ncell search "SMS" --tag 50 --sort validity:desc,price:asc
+ncell plans --search "Combo" --sort validity:desc,price:asc</code></pre>
+<p>Search sends the keyword to Ncell's catalog endpoint. It is server-side and scoped to the selected tag, not a local text filter or an all-catalog search. Omitting <code>--tag</code> searches tag 66. An empty keyword is rejected; no matches produce an empty catalog.</p>
+
+<h3 id="searching-sort">Sort by more than one field</h3>
+<pre data-lang="Shell"><code>ncell search "SMS" --tag 50 --sort validity:desc,price:asc
 ncell plans --sort validity:desc --sort price:asc
-ncell plans --sort validity,price</code></pre><p>Supported fields are <code>price</code> and <code>validity</code>. Directions are <code>asc</code> and <code>desc</code>; omitted directions mean ascending. The default is ascending price.</p><p>Keys are applied left to right: <code>validity:desc,price:asc</code> means longest validity first, then lowest price among plans with equal validity. Repeated <code>--sort</code> flags and comma-separated keys are equivalent. Sorting runs locally after the server response and applies to JSON too. Durations in minutes, hours, days and weeks are compared on a common scale.</p><div class="command-builder"><div><span class="section-label">TRY THE SYNTAX</span><h3>Build a search command</h3><p>Creates a command to copy; it does not contact Ncell.</p></div><form id="builder"><label>Keyword<input id="keyword" value="SMS" required></label><label>Catalog<select id="tag"><option value="50">50 · SMS</option><option value="61">61 · Voice</option><option value="66">66 · Data &amp; Voice</option></select></label><label>Sort<select id="sort"><option value="price">Lowest price</option><option value="price:desc">Highest price</option><option value="validity:desc,price:asc">Longest validity, then price</option><option value="validity,price">Shortest validity, then price</option></select></label><label class="checkbox"><input type="checkbox" id="json-option"> JSON output</label></form><pre><code id="built-command">ncell search "SMS" --tag 50 --sort price</code></pre><small>Preview uses PowerShell quoting for literal keywords.</small></div></section>
-<section id="subscribe"><div class="section-label">06 — SUBSCRIPTIONS</div><h2>Activate a listed plan.</h2><pre><code>ncell plans --tag 50
-ncell subscribe --tag 50 --id 984</code></pre><p>Use the plan ID from the catalog and the same tag that listed it. <code>--id</code> is required; <code>--tag</code> defaults to 66. A tag ID is not a plan ID.</p><div class="notice warning">This command submits a subscription request immediately. Paid packs charge your Ncell balance. Check the current catalog and price first.</div><p>The CLI fetches current plan metadata, including subscription code, name and price, then submits the subscription using the saved login device ID. Successful plain output is <code>Subscribed to &lt;plan name&gt;.</code> Use <code>--json</code> for the complete subscription response.</p><p>HTTP success with billing code <code>BIL1000</code> is recognized as success, even when <code>responseCode</code> is <code>00</code>. Network and business errors are not automatically retried; explicit token expiry can trigger the one-time authenticated refresh workflow.</p><p>If a request times out, check balances or the app before manually submitting it again. The operation may have reached the server.</p></section>
-<section id="sms"><div class="section-label">07 — MESSAGING</div><h2>Use your free SMS allowance.</h2><pre><code>ncell send-free-sms 98XXXXXXXX "Hello"
-ncell send-free-sms 98XXXXXXXX "Hello" --json</code></pre><p>The recipient must be a ten-digit Nepal mobile number, optionally prefixed with <code>+977</code>. Message text must not be blank. Eligibility and remaining free SMS allowance are controlled by Ncell.</p><p>Plain success output is <code>SMS sent to &lt;number&gt;.</code> JSON returns the server response. The CLI checks the inner SMS status, because an outer successful response code does not always mean the message was sent.</p><p>Business and network failures do not trigger a resend. An explicit expired-access-token rejection can trigger one refresh and retry.</p></section>
-<section id="json"><div class="section-label">08 — AUTOMATION</div><h2>Structured output, on request.</h2><pre><code>ncell --json balance
+ncell plans --sort validity,price</code></pre>
+<p>Supported fields are <code>price</code> and <code>validity</code>. Directions are <code>asc</code> and <code>desc</code>; omitted directions mean ascending. The default is ascending price.</p>
+<p>Keys are applied left to right: <code>validity:desc,price:asc</code> means longest validity first, then lowest price among plans with equal validity. Repeated <code>--sort</code> flags and comma-separated keys are equivalent. Sorting runs locally after the server response and applies to JSON too. Durations in minutes, hours, days and weeks are compared on a common scale.</p>
+
+<h2 id="subscribe">Subscribe to a plan</h2>
+<pre data-lang="Shell"><code>ncell plans --tag 50
+ncell subscribe --tag 50 --id 984</code></pre>
+<p>Use the plan ID from the catalog and the same tag that listed it. <code>--id</code> is required; <code>--tag</code> defaults to 66. A tag ID is not a plan ID.</p>
+<div class="callout callout-warning" role="note"><svg class="ico" aria-hidden="true"><use href="#i-triangle-alert"/></svg><div><p class="callout-title">Warning</p><p>This command submits a subscription request immediately. Paid packs charge your Ncell balance. Check the current catalog and price first.</p></div></div>
+<p>The CLI fetches current plan metadata, including subscription code, name and price, then submits the subscription using the saved login device ID. Successful plain output is <code>Subscribed to &lt;plan name&gt;.</code> Use <code>--json</code> for the complete subscription response.</p>
+<p>HTTP success with billing code <code>BIL1000</code> is recognized as success, even when <code>responseCode</code> is <code>00</code>. Network and business errors are not automatically retried; explicit token expiry can trigger the one-time authenticated refresh workflow.</p>
+<p>If a request times out, check balances or the app before manually submitting it again. The operation may have reached the server.</p>
+
+<h2 id="sms">Free SMS</h2>
+<pre data-lang="Shell"><code>ncell send-free-sms 98XXXXXXXX "Hello"
+ncell send-free-sms 98XXXXXXXX "Hello" --json</code></pre>
+<p>The recipient must be a ten-digit Nepal mobile number, optionally prefixed with <code>+977</code>. Message text must not be blank. Eligibility and remaining free SMS allowance are controlled by Ncell.</p>
+<p>Plain success output is <code>SMS sent to &lt;number&gt;.</code> JSON returns the server response. The CLI checks the inner SMS status, because an outer successful response code does not always mean the message was sent.</p>
+<p>Business and network failures do not trigger a resend. An explicit expired-access-token rejection can trigger one refresh and retry.</p>
+
+<h2 id="json">JSON output and scripting</h2>
+<pre data-lang="Shell"><code>ncell --json balance
 ncell plans --tag 50 --sort price --json
-ncell profile --json</code></pre><p><code>--json</code> is global and works before or after any command. It changes output formatting, not whether the command buys a pack, sends an SMS or changes the session.</p><div class="table-wrap"><table><thead><tr><th>Result</th><th>Output</th><th>Exit status</th></tr></thead><tbody><tr><td>Success</td><td>JSON on stdout</td><td>0</td></tr><tr><td>Ncell rejection</td><td>Full server JSON on stdout</td><td>Nonzero</td></tr><tr><td>Local or network error</td><td>JSON error on stderr</td><td>Nonzero</td></tr><tr><td>Argument errors / help</td><td>Clap's standard formatting</td><td>Depends on invocation</td></tr></tbody></table></div><p>Balance and profile return their response object. Catalog and subscription commands preserve their server response. Local commands, login and refresh return operation status without exposing tokens. OTP prompts remain interactive and outside JSON stdout.</p><h3>PowerShell example</h3><pre><code>$raw = ncell plans --tag 50 --json
+ncell profile --json</code></pre>
+<p><code>--json</code> is global and works before or after any command. It changes output formatting, not whether the command buys a pack, sends an SMS or changes the session.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Result</th><th>Output</th><th>Exit status</th></tr></thead>
+  <tbody>
+    <tr><td>Success</td><td>JSON on stdout</td><td>0</td></tr>
+    <tr><td>Ncell rejection</td><td>Full server JSON on stdout</td><td>Nonzero</td></tr>
+    <tr><td>Local or network error</td><td>JSON error on stderr</td><td>Nonzero</td></tr>
+    <tr><td>Argument errors / help</td><td>Clap's standard formatting</td><td>Depends on invocation</td></tr>
+  </tbody>
+</table></div>
+<p>Balance and profile return their response object. Catalog and subscription commands preserve their server response. Local commands, login and refresh return operation status without exposing tokens. OTP prompts remain interactive and outside JSON stdout.</p>
+
+<h3 id="json-powershell">PowerShell example</h3>
+<pre data-lang="PowerShell"><code>$raw = ncell plans --tag 50 --json
 if ($LASTEXITCODE -eq 0) {
     $catalog = $raw | ConvertFrom-Json
     $catalog.availablePackages
-}</code></pre><p>Check the exit status before treating JSON as a successful result. Server rejection JSON has a different structure from the successful catalog.</p></section>
-<section id="sessions"><div class="section-label">09 — SESSION LIFECYCLE</div><h2>Refresh without the ceremony.</h2><p>Tokens and device identity are stored under service <code>ncell-cli</code>, entry <code>session</code>, in your platform's native credential store. OTPs are not persisted. There is no plaintext storage fallback.</p><h3>Automatic refresh</h3><ol><li>An authenticated request is rejected with HTTP 401 and <code>LGN2001</code>.</li><li>The saved refresh token and matching device ID are used to refresh.</li><li>New tokens are saved before the original operation is retried once.</li></ol><p>A failed refresh preserves the previous session and stops. A second expiry response is returned without looping. Other authentication, business and network errors are not replayed. Automatic refresh applies to balance, profile, plans, search, subscriptions and free SMS.</p><h3>Manual refresh</h3><pre><code>ncell refresh
-ncell refresh --json</code></pre><p>The CLI saves the new access token and any new refresh token returned by the server. If no replacement refresh token is returned, the existing one is retained. A missing saved refresh token requires login again.</p><div class="notice">If the mobile app and CLI share a login, token rotation can invalidate the app's old tokens. Synchronize the new tokens before using that shared session again. The CLI does not synchronize automatically.</div></section>
-<section id="import"><div class="section-label">10 — ADVANCED</div><h2>Bring an existing session.</h2><p><code>import-session</code> reads JSON from standard input. The device ID must match the login that produced the tokens.</p><pre><code>{
+}</code></pre>
+<p>Check the exit status before treating JSON as a successful result. Server rejection JSON has a different structure from the successful catalog.</p>
+
+<h2 id="sessions">Sessions and token refresh</h2>
+<p>Tokens and device identity are stored under service <code>ncell-cli</code>, entry <code>session</code>, in your platform's native credential store. OTPs are not persisted. There is no plaintext storage fallback.</p>
+
+<h3 id="sessions-auto">Automatic refresh</h3>
+<ol>
+  <li>An authenticated request is rejected with HTTP 401 and <code>LGN2001</code>.</li>
+  <li>The saved refresh token and matching device ID are used to refresh.</li>
+  <li>New tokens are saved before the original operation is retried once.</li>
+</ol>
+<p>A failed refresh preserves the previous session and stops. A second expiry response is returned without looping. Other authentication, business and network errors are not replayed. Automatic refresh applies to balance, profile, plans, search, subscriptions and free SMS.</p>
+
+<h3 id="sessions-manual">Manual refresh</h3>
+<pre data-lang="Shell"><code>ncell refresh
+ncell refresh --json</code></pre>
+<p>The CLI saves the new access token and any new refresh token returned by the server. If no replacement refresh token is returned, the existing one is retained. A missing saved refresh token requires login again.</p>
+<div class="callout callout-note" role="note"><svg class="ico" aria-hidden="true"><use href="#i-info"/></svg><div><p class="callout-title">Note</p><p>If the mobile app and CLI share a login, token rotation can invalidate the app's old tokens. Synchronize the new tokens before using that shared session again. The CLI does not synchronize automatically.</p></div></div>
+
+<h2 id="import">Import a session</h2>
+<p><code>import-session</code> reads JSON from standard input. The device ID must match the login that produced the tokens.</p>
+<pre data-lang="JSON"><code>{
   "device_id": "&lt;matching login device ID&gt;",
   "account": {
     "msisdn": "&lt;10-digit number&gt;",
@@ -63,16 +325,99 @@ ncell refresh --json</code></pre><p>The CLI saves the new access token and any n
     "refresh_token": "&lt;refresh token&gt;",
     "authenticated_at": "&lt;ISO UTC timestamp&gt;"
   }
-}</code></pre><pre><code># PowerShell
+}</code></pre>
+<pre data-lang="Shell"><code># PowerShell
 Get-Content -Raw session.json | ncell import-session
 
 # Unix shell
-ncell import-session &lt; session.json</code></pre><p>Keep any session files private. Normal login writes directly to the system keyring.</p><h3>Optional local Android bridge</h3><pre><code>.\sync_token.ps1 mobile-to-cli
-.\sync_token.ps1 cli-to-mobile</code></pre><p>The Windows bridge script and its sibling <code>../bypass/scripts/pull_tokens.ps1</code> / <code>push_tokens.ps1</code> helpers are local tools and are not included in the repository. They require the separately configured rooted Android device, adb and Python setup, plus a release CLI build.</p><p>Mobile import preserves the number and device ID. Pushing tokens restarts the app through the helper. Neither direction requests an OTP or refreshes tokens.</p></section>
-<section id="errors"><div class="section-label">11 — TROUBLESHOOTING</div><h2>Understand the response.</h2><pre><code>ncell doctor</code></pre><p>Doctor makes a HEAD request without submitting a number, sending an OTP or reading credentials. Any HTTP response proves an HTTPS connection was established; a 405 is expected from an endpoint that normally accepts POST. This is a connectivity check, not proof that account APIs are healthy.</p><p>The client uses a 45-second connect timeout and a 90-second overall timeout. Network failures are returned without automatic retries.</p><div class="table-wrap"><table><thead><tr><th>Code / error</th><th>Meaning / next step</th></tr></thead><tbody><tr><td>LGN2000</td><td>Mobile number is missing.</td></tr><tr><td>LGN2001</td><td>Access token expired; authenticated commands attempt one refresh.</td></tr><tr><td>LGN2002</td><td>Authentication token was not supplied.</td></tr><tr><td>LGN2003</td><td>Authentication error; exact meaning unconfirmed. No automatic refresh.</td></tr><tr><td>LGN2004</td><td>Invalid refresh token or a mismatched device ID. Re-establish a matching session.</td></tr><tr><td>LGN2005</td><td>Number change is not allowed.</td></tr><tr><td>LGN2007</td><td>Invalid mobile number.</td></tr><tr><td>LGN2009</td><td>Request validation failed; a required field may be missing.</td></tr><tr><td>LGN3000</td><td>Unable to process the request; try again later.</td></tr><tr><td>BIL1000</td><td>Subscription success when returned with HTTP success.</td></tr><tr><td>BIL2006</td><td>Duplicate subscription request; wait before retrying.</td></tr><tr><td>PSU2001</td><td>Subscriber cannot subscribe/unsubscribe in the current state, as observed in a captured response.</td></tr><tr><td>Storage unavailable</td><td>Unlock your system credential store; check Secret Service and session D-Bus on Linux.</td></tr><tr><td>No pending OTP</td><td>Run normal login for the number first, then resume with that same number.</td></tr><tr><td>Plan not found</td><td>Use a plan ID and the tag that listed it. Tags and plans have separate IDs.</td></tr></tbody></table></div><p>Plain errors preserve HTTP status and the server code with safe static labels. Use <code>--json</code> for the original server rejection body. Unknown codes are not assigned guessed meanings.</p></section>
-<section id="commands"><div class="section-label">12 — QUICK REFERENCE</div><h2>Every command at a glance.</h2><div class="table-wrap"><table><thead><tr><th>Command</th><th>Arguments / options</th></tr></thead><tbody><tr><td><code>login</code></td><td><code>&lt;number&gt; [--verify]</code></td></tr><tr><td><code>status</code></td><td>Local session only</td></tr><tr><td><code>logout</code></td><td>Remove local session and device ID</td></tr><tr><td><code>doctor</code></td><td>Credential-free connectivity check</td></tr><tr><td><code>balance</code></td><td>Account balance summary</td></tr><tr><td><code>profile</code></td><td>Subscriber profile summary</td></tr><tr><td><code>plans</code></td><td><code>[--tag &lt;id&gt;] [--search &lt;text&gt;] [--sort &lt;keys&gt;]</code> or <code>--list-tags</code></td></tr><tr><td><code>search</code></td><td><code>&lt;keyword&gt; [--tag &lt;id&gt;] [--sort &lt;keys&gt;]</code></td></tr><tr><td><code>subscribe</code></td><td><code>--id &lt;plan-id&gt; [--tag &lt;id&gt;]</code></td></tr><tr><td><code>send-free-sms</code></td><td><code>&lt;number&gt; &lt;text&gt;</code></td></tr><tr><td><code>refresh</code></td><td>Rotate saved tokens</td></tr><tr><td><code>import-session</code></td><td>Read session JSON from stdin</td></tr></tbody></table></div><p>Global options: <code>--json</code>, <code>--help</code>. Use <code>ncell --version</code> for the version and <code>ncell &lt;command&gt; --help</code> for a command's usage.</p></section>
-<section id="protocol"><div class="section-label">13 — UNDER THE HOOD</div><h2>Small requests. Explicit behavior.</h2><p>The shared blocking HTTP client calls <code>https://sca.ncell.com.np/adl/et/telco/selfcare/ncell/api</code>. Requests use JSON content type and bearer authentication where required, plus library-managed transport headers. Redirect following is disabled.</p><div class="table-wrap"><table><thead><tr><th>Operation</th><th>POST path</th></tr></thead><tbody><tr><td>Generate OTP</td><td><code>/v1.0/user/otp/generate</code></td></tr><tr><td>Validate OTP</td><td><code>/v1.0/user/otp/validate</code></td></tr><tr><td>Refresh</td><td><code>/v1.0/user/refresh/token</code></td></tr><tr><td>Balance</td><td><code>/v1.0/accountmgt/balance/query</code></td></tr><tr><td>Profile</td><td><code>/v1.0/subscriber/profile/query</code></td></tr><tr><td>Tags</td><td><code>/v1.0/product-catalog/tags</code></td></tr><tr><td>Catalogs / search</td><td><code>/v1.0/product/{data|voice|sms}-plans</code></td></tr><tr><td>Subscribe</td><td><code>/v1.0/billingmgt/product/subscribe</code></td></tr><tr><td>Free SMS</td><td><code>/v1.0/smsmgt/free/sms/send</code></td></tr></tbody></table></div><h3>Retained request fields</h3><p>The common JSON <code>requestHeader</code> has ten fields: <code>requestId</code>, <code>timestamp</code>, <code>channel</code>, <code>deviceType</code>, <code>clientip</code>, <code>action</code>, <code>msisdn</code>, <code>location</code>, <code>primaryMsisdn</code> and <code>languageCode</code>. Individual omission checks established their necessity on OTP, balance, profile, tags, catalogs and refresh for the tested flow.</p><ul><li>OTP generation retains number, device ID and login action. Validation retains number, device ID, nested action and OTP.</li><li>Balance retains the number in its query object.</li><li>Profile accepts an empty query object, but requires the object and app-version header.</li><li>Tags retain app version; omitting it silently hid a tag in live checks.</li><li>Catalogs retain number, language, tag, <code>sortby.name</code> and the common header. A keyword is added only for search.</li><li>Refresh retains the refresh-token object and matching device ID in the header.</li><li>SMS uses destination, content and <code>isConfirm: 0</code>. Omitting the confirmation field failed despite an outer success code.</li><li>Subscription retains captured metadata pending further omission tests.</li></ul><div class="notice">Individual common-header omissions for SMS and further subscription-field omissions remain unverified. “Minimum” describes observed checks, not every possible server behavior. API requirements can change.</div></section>
-<section id="development"><div class="section-label">14 — DEVELOPMENT</div><h2>Small by design.</h2><pre><code>src/
+ncell import-session &lt; session.json</code></pre>
+<p>Keep any session files private. Normal login writes directly to the system keyring.</p>
+
+<h3 id="import-android">Local Android bridge (optional)</h3>
+<pre data-lang="PowerShell"><code>.\sync_token.ps1 mobile-to-cli
+.\sync_token.ps1 cli-to-mobile</code></pre>
+<p>The Windows bridge script and its sibling <code>../bypass/scripts/pull_tokens.ps1</code> / <code>push_tokens.ps1</code> helpers are local tools and are not included in the repository. They require the separately configured rooted Android device, adb and Python setup, plus a release CLI build.</p>
+<p>Mobile import preserves the number and device ID. Pushing tokens restarts the app through the helper. Neither direction requests an OTP or refreshes tokens.</p>
+
+<h2 id="errors">Troubleshooting</h2>
+<pre data-lang="Shell"><code>ncell doctor</code></pre>
+<p>Doctor makes a HEAD request without submitting a number, sending an OTP or reading credentials. Any HTTP response proves an HTTPS connection was established; a 405 is expected from an endpoint that normally accepts POST. This is a connectivity check, not proof that account APIs are healthy.</p>
+<p>The client uses a 45-second connect timeout and a 90-second overall timeout. Network failures are returned without automatic retries.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Code / error</th><th>Meaning / next step</th></tr></thead>
+  <tbody>
+    <tr><td>LGN2000</td><td>Mobile number is missing.</td></tr>
+    <tr><td>LGN2001</td><td>Access token expired; authenticated commands attempt one refresh.</td></tr>
+    <tr><td>LGN2002</td><td>Authentication token was not supplied.</td></tr>
+    <tr><td>LGN2003</td><td>Authentication error; exact meaning unconfirmed. No automatic refresh.</td></tr>
+    <tr><td>LGN2004</td><td>Invalid refresh token or a mismatched device ID. Re-establish a matching session.</td></tr>
+    <tr><td>LGN2005</td><td>Number change is not allowed.</td></tr>
+    <tr><td>LGN2007</td><td>Invalid mobile number.</td></tr>
+    <tr><td>LGN2009</td><td>Request validation failed; a required field may be missing.</td></tr>
+    <tr><td>LGN3000</td><td>Unable to process the request; try again later.</td></tr>
+    <tr><td>BIL1000</td><td>Subscription success when returned with HTTP success.</td></tr>
+    <tr><td>BIL2006</td><td>Duplicate subscription request; wait before retrying.</td></tr>
+    <tr><td>PSU2001</td><td>Subscriber cannot subscribe/unsubscribe in the current state, as observed in a captured response.</td></tr>
+    <tr><td>Storage unavailable</td><td>Unlock your system credential store; check Secret Service and session D-Bus on Linux.</td></tr>
+    <tr><td>No pending OTP</td><td>Run normal login for the number first, then resume with that same number.</td></tr>
+    <tr><td>Plan not found</td><td>Use a plan ID and the tag that listed it. Tags and plans have separate IDs.</td></tr>
+  </tbody>
+</table></div>
+<p>Plain errors preserve HTTP status and the server code with safe static labels. Use <code>--json</code> for the original server rejection body. Unknown codes are not assigned guessed meanings.</p>
+
+<h2 id="commands">Command reference</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Command</th><th>Arguments / options</th></tr></thead>
+  <tbody>
+    <tr><td><code>login</code></td><td><code>&lt;number&gt; [--verify]</code></td></tr>
+    <tr><td><code>status</code></td><td>Local session only</td></tr>
+    <tr><td><code>logout</code></td><td>Remove local session and device ID</td></tr>
+    <tr><td><code>doctor</code></td><td>Credential-free connectivity check</td></tr>
+    <tr><td><code>balance</code></td><td>Account balance summary</td></tr>
+    <tr><td><code>profile</code></td><td>Subscriber profile summary</td></tr>
+    <tr><td><code>plans</code></td><td><code>[--tag &lt;id&gt;] [--search &lt;text&gt;] [--sort &lt;keys&gt;]</code> or <code>--list-tags</code></td></tr>
+    <tr><td><code>search</code></td><td><code>&lt;keyword&gt; [--tag &lt;id&gt;] [--sort &lt;keys&gt;]</code></td></tr>
+    <tr><td><code>subscribe</code></td><td><code>--id &lt;plan-id&gt; [--tag &lt;id&gt;]</code></td></tr>
+    <tr><td><code>send-free-sms</code></td><td><code>&lt;number&gt; &lt;text&gt;</code></td></tr>
+    <tr><td><code>refresh</code></td><td>Rotate saved tokens</td></tr>
+    <tr><td><code>import-session</code></td><td>Read session JSON from stdin</td></tr>
+  </tbody>
+</table></div>
+<p>Global options: <code>--json</code>, <code>--help</code>. Use <code>ncell --version</code> for the version and <code>ncell &lt;command&gt; --help</code> for a command's usage.</p>
+
+<h2 id="protocol">API and request design</h2>
+<p>The shared blocking HTTP client calls <code>https://sca.ncell.com.np/adl/et/telco/selfcare/ncell/api</code>. Requests use JSON content type and bearer authentication where required, plus library-managed transport headers. Redirect following is disabled.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Operation</th><th>POST path</th></tr></thead>
+  <tbody>
+    <tr><td>Generate OTP</td><td><code>/v1.0/user/otp/generate</code></td></tr>
+    <tr><td>Validate OTP</td><td><code>/v1.0/user/otp/validate</code></td></tr>
+    <tr><td>Refresh</td><td><code>/v1.0/user/refresh/token</code></td></tr>
+    <tr><td>Balance</td><td><code>/v1.0/accountmgt/balance/query</code></td></tr>
+    <tr><td>Profile</td><td><code>/v1.0/subscriber/profile/query</code></td></tr>
+    <tr><td>Tags</td><td><code>/v1.0/product-catalog/tags</code></td></tr>
+    <tr><td>Catalogs / search</td><td><code>/v1.0/product/{data|voice|sms}-plans</code></td></tr>
+    <tr><td>Subscribe</td><td><code>/v1.0/billingmgt/product/subscribe</code></td></tr>
+    <tr><td>Free SMS</td><td><code>/v1.0/smsmgt/free/sms/send</code></td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="protocol-fields">Retained request fields</h3>
+<p>The common JSON <code>requestHeader</code> has ten fields: <code>requestId</code>, <code>timestamp</code>, <code>channel</code>, <code>deviceType</code>, <code>clientip</code>, <code>action</code>, <code>msisdn</code>, <code>location</code>, <code>primaryMsisdn</code> and <code>languageCode</code>. Individual omission checks established their necessity on OTP, balance, profile, tags, catalogs and refresh for the tested flow.</p>
+<ul>
+  <li>OTP generation retains number, device ID and login action. Validation retains number, device ID, nested action and OTP.</li>
+  <li>Balance retains the number in its query object.</li>
+  <li>Profile accepts an empty query object, but requires the object and app-version header.</li>
+  <li>Tags retain app version; omitting it silently hid a tag in live checks.</li>
+  <li>Catalogs retain number, language, tag, <code>sortby.name</code> and the common header. A keyword is added only for search.</li>
+  <li>Refresh retains the refresh-token object and matching device ID in the header.</li>
+  <li>SMS uses destination, content and <code>isConfirm: 0</code>. Omitting the confirmation field failed despite an outer success code.</li>
+  <li>Subscription retains captured metadata pending further omission tests.</li>
+</ul>
+<div class="callout callout-note" role="note"><svg class="ico" aria-hidden="true"><use href="#i-info"/></svg><div><p class="callout-title">Note</p><p>Individual common-header omissions for SMS and further subscription-field omissions remain unverified. “Minimum” describes observed checks, not every possible server behavior. API requirements can change.</p></div></div>
+
+<h2 id="development">Development</h2>
+<pre data-lang="Text"><code>src/
 ├── api/          HTTP transport and request builders
 ├── session/      Session models and native keyring
 ├── auth.rs       Login and bounded token refresh
@@ -80,16 +425,42 @@ ncell import-session &lt; session.json</code></pre><p>Keep any session files pri
 ├── error.rs      Safe error labels
 ├── lib.rs        Reusable library
 └── main.rs       Process entry point
-docs/             This site: plain HTML, CSS and JS
-assets/           README artwork</code></pre><p>Libraries handle the standard work: <code>clap</code>, <code>reqwest</code>, <code>serde</code>, <code>keyring</code>, <code>rpassword</code>, <code>chrono</code>, <code>uuid</code> and <code>thiserror</code>. There is no custom HTTP stack or JWT parser.</p><pre><code>cargo fmt --check
+docs/             This site: plain HTML, CSS and JavaScript
+assets/           README artwork</code></pre>
+<p>Libraries handle the standard work: <code>clap</code>, <code>reqwest</code>, <code>serde</code>, <code>keyring</code>, <code>rpassword</code>, <code>chrono</code>, <code>uuid</code> and <code>thiserror</code>. There is no custom HTTP stack or JWT parser.</p>
+<pre data-lang="Shell"><code>cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked</code></pre><p>CI checks Windows, macOS and Linux. Source unit tests are included. The local integration-test directory and Android token bridge are ignored and excluded from this repository. Live account operations are separate from automated checks.</p><h3>Documentation development</h3><pre><code>python -m http.server 8080 --directory docs</code></pre><p>Open <code>http://localhost:8080</code>. No build tools, frontend framework, external fonts or runtime dependencies are required. The Pages workflow publishes only <code>docs/</code> after pushes to main.</p></section>
-<footer><a class="brand" href="#overview">ncell<span>-cli</span></a><p>Written in Rust. Documented for humans.</p><a href="https://github.com/rohityadav-sas/ncell-cli">View source ↗</a></footer>
+cargo test --locked</code></pre>
+<p>CI checks Windows, macOS and Linux. Source unit tests are included. The local integration-test directory and Android token bridge are ignored and excluded from this repository. Live account operations are separate from automated checks.</p>
+
+<h3 id="development-docs">Documentation development</h3>
+<pre data-lang="Shell"><code>python -m http.server 8080 --directory docs</code></pre>
+<p>Open <code>http://localhost:8080</code>. No build tools, frontend framework, external fonts or runtime dependencies are required. The Pages workflow publishes only <code>docs/</code> after pushes to main.</p>
+
+</article>
+
+<footer class="page-footer">
+  <p>ncell-cli v0.1.0 <span class="footer-dot">·</span> MIT licensed</p>
+  <a href="https://github.com/rohityadav-sas/ncell-cli"><svg class="ico ico-fill" aria-hidden="true"><use href="#i-github"/></svg><span>View source on GitHub</span></a>
+<p class="attribution">Independent project. Ncell logo belongs to Ncell. <a href="third-party-notices.txt">Icon credits and licenses</a>.</p>
+</footer>
 </main>
-<button id="top" aria-label="Back to top" hidden>↑</button>
-<noscript><style>#search,.search-box kbd,#builder,#theme,#menu{display:none}@media(max-width:900px){#sidebar{position:static;display:block;width:auto;margin-top:70px}main{padding-top:20px}}</style><p class="notice">JavaScript is disabled. All documentation and links remain available; search and copy controls require JavaScript.</p></noscript>
-</body></html>
 
+<dialog id="search-dialog" aria-label="Search documentation">
+  <div class="search-head">
+    <svg class="ico" aria-hidden="true"><use href="#i-search"/></svg>
+    <input id="search-input" type="search" placeholder="Search documentation" autocomplete="off" spellcheck="false" role="combobox" aria-label="Search documentation" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+    <kbd>Esc</kbd>
+  </div>
+  <p id="search-status" class="search-hint" role="status"></p>
+  <ul id="search-results" role="listbox" aria-label="Search results"></ul>
+  <div class="search-foot">
+    <span><kbd><svg class="ico" aria-hidden="true"><use href="#i-arrow-up"/></svg></kbd><kbd><svg class="ico" aria-hidden="true"><use href="#i-arrow-down"/></svg></kbd> to navigate</span>
+    <span><kbd><svg class="ico" aria-hidden="true"><use href="#i-corner-down-left"/></svg></kbd> to open</span>
+    <span><kbd>Esc</kbd> to close</span>
+  </div>
+</dialog>
 
-
-
+<script src="app.js" defer></script>
+</body>
+</html>
