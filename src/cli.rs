@@ -29,8 +29,6 @@ enum Command {
     Status,
     /// Remove the local session, including the device ID. Does not revoke server tokens.
     Logout,
-    /// Check HTTPS connectivity without sending an OTP or reading credentials.
-    Doctor,
     /// Query credit, data, voice and SMS balances.
     Balance,
     /// Query the subscriber profile; use --json for all details.
@@ -188,17 +186,6 @@ pub fn run(args: Args) -> Result<()> {
                 args.json,
                 json!({"session_removed": true}),
                 "Local session removed.",
-            );
-        }
-        Command::Doctor => {
-            if !args.json {
-                println!("Checking HTTPS to sca.ncell.com.np (no SMS request)...");
-            }
-            let status = Client::new()?.check_connection()?;
-            output(
-                args.json,
-                json!({"connected": true, "http_status": status}),
-                format!("HTTPS connected. HTTP {status} (any status confirms connectivity)."),
             );
         }
         command @ (Command::Balance | Command::Profile | Command::Plans { .. }) => {
@@ -420,7 +407,6 @@ mod tests {
             vec!["login", "9812345678", "--verify"],
             vec!["status"],
             vec!["logout"],
-            vec!["doctor"],
             vec!["balance"],
             vec!["profile"],
             vec!["search", "Super", "--category", "66"],

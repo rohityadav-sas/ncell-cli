@@ -28,16 +28,6 @@ impl Client {
         })
     }
 
-    /// Check HTTPS without submitting a phone number, OTP or credentials.
-    /// Any HTTP status proves the HTTPS connection was established.
-    pub fn check_connection(&self) -> Result<u16> {
-        self.http
-            .head(format!("{}/v1.0/user/otp/generate", self.base_url))
-            .send()
-            .map(|response| response.status().as_u16())
-            .map_err(Error::from_http)
-    }
-
     pub(crate) fn post(&self, path: &str, body: &Value, token: Option<&str>) -> Result<Value> {
         let mut request = self
             .http

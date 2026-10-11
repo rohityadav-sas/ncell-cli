@@ -550,137 +550,6 @@ ncell subscribe --category 50 --id 984</code></pre>
             <pre data-lang="Shell"><code>ncell refresh</code></pre>
 
 
-            <h2 id="errors">Troubleshooting</h2>
-            <p>API errors show the HTTP status, response code and its known meaning. See the <a
-                    href="response-codes.html">full response-code reference</a>. Unmapped meanings are marked
-                unconfirmed or unavailable; use <code>--json</code> for the complete server response.</p>
-            <pre data-lang="Shell"><code>ncell doctor</code></pre>
-            <p>
-                Doctor makes a HEAD request without submitting a number,
-                sending an OTP or reading credentials. Any HTTP response
-                proves an HTTPS connection was established; a 405 is
-                expected from an endpoint that normally accepts POST. This
-                is a connectivity check, not proof that account APIs are
-                healthy.
-            </p>
-            <p>
-                The client uses a 45-second connect timeout and a 90-second
-                overall timeout. Network failures are returned without
-                automatic retries.
-            </p>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Code / error</th>
-                            <th>Meaning / next step</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>LGN2000</td>
-                            <td>Mobile number is missing.</td>
-                        </tr>
-                        <tr>
-                            <td>LGN2001</td>
-                            <td>
-                                Access token expired; authenticated commands
-                                attempt one refresh.
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>LGN2002</td>
-                            <td>Authentication token was not supplied.</td>
-                        </tr>
-                        <tr>
-                            <td>LGN2003</td>
-                            <td>
-                                Authentication error; exact meaning
-                                unconfirmed. No automatic refresh.
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>LGN2004</td>
-                            <td>
-                                Invalid refresh token or a mismatched device
-                                ID. Re-establish a matching session.
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>LGN2005</td>
-                            <td>Number change is not allowed.</td>
-                        </tr>
-                        <tr>
-                            <td>LGN2007</td>
-                            <td>Invalid mobile number.</td>
-                        </tr>
-                        <tr>
-                            <td>LGN2009</td>
-                            <td>
-                                Request validation failed; a required field
-                                may be missing.
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>LGN3000</td>
-                            <td>
-                                Unable to process the request; try again
-                                later.
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>BIL1000</td>
-                            <td>
-                                Subscription success when returned with HTTP
-                                success.
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>BIL2006</td>
-                            <td>
-                                Duplicate subscription request; wait before
-                                retrying.
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>PSU2001</td>
-                            <td>
-                                Subscriber cannot subscribe/unsubscribe in
-                                the current state, as observed in a captured
-                                response.
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Storage unavailable</td>
-                            <td>
-                                Unlock your system credential store; check
-                                Secret Service and session D-Bus on Linux.
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>No pending OTP</td>
-                            <td>
-                                Run normal login for the number first, then
-                                resume with that same number.
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Plan not found</td>
-                            <td>
-                                Use a plan ID and the category that listed it.
-                                Categories and plans have separate IDs.
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <p>
-                Plain errors preserve HTTP status and the server code with
-                safe static labels. Use <code>--json</code> for the original
-                server rejection body. Unknown codes are not assigned
-                guessed meanings.
-            </p>
-
             <h2 id="commands">Command reference</h2>
             <div class="table-wrap">
                 <table>
@@ -697,15 +566,11 @@ ncell subscribe --category 50 --id 984</code></pre>
                         </tr>
                         <tr>
                             <td><code>status</code></td>
-                            <td>Local session only</td>
+                            <td>Local session</td>
                         </tr>
                         <tr>
                             <td><code>logout</code></td>
                             <td>Remove local session and device ID</td>
-                        </tr>
-                        <tr>
-                            <td><code>doctor</code></td>
-                            <td>Credential-free connectivity check</td>
                         </tr>
                         <tr>
                             <td><code>balance</code></td>

@@ -6,13 +6,9 @@ pub enum Error {
     InvalidInput(&'static str),
     #[error("Network request failed; check your connection and try again")]
     Network,
-    #[error(
-        "Connection to Ncell timed out. Run `ncell doctor` to check HTTPS without requesting an OTP"
-    )]
+    #[error("Connection to Ncell timed out; check your connection and try again")]
     Timeout,
-    #[error(
-        "Could not establish a connection to Ncell (DNS, TCP or TLS failure). Run `ncell doctor` for a connection check"
-    )]
+    #[error("Could not establish a connection to Ncell (DNS, TCP or TLS failure)")]
     Connection,
     #[error("Ncell returned an invalid response")]
     InvalidResponse,
