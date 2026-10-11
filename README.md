@@ -16,7 +16,7 @@ OTP login · balances · plans · subscriptions · free SMS
 **WinGet (Windows)**
 
 ```powershell
-winget install --id RohitYadav.NcellCLI --exact
+winget install --id RohitYadav.NcellCLI
 ```
 
 **Scoop (Windows)**
