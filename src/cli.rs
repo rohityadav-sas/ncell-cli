@@ -8,8 +8,20 @@ use ncell_cli::{
 use serde_json::{Value, json};
 
 #[derive(Parser)]
-#[command(name = "ncell", version, about = "Ncell account CLI")]
+#[command(
+    name = "ncell",
+    version,
+    about = "Ncell account CLI",
+    disable_help_flag = true,
+    disable_version_flag = true
+)]
 pub struct Args {
+    /// Print help.
+    #[arg(long, global = true, action = clap::ArgAction::Help)]
+    pub help: Option<bool>,
+    /// Print version.
+    #[arg(long, action = clap::ArgAction::Version)]
+    pub version: Option<bool>,
     /// Print structured JSON output.
     #[arg(long, global = true)]
     pub json: bool,
