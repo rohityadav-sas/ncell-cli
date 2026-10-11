@@ -66,6 +66,7 @@ Download a ZIP from [Releases](https://github.com/rohityadav-sas/ncell-cli/relea
 | Platform | Architecture | Archive suffix |
 | --- | --- | --- |
 | Windows | x64 | `windows-x86_64.zip` |
+| Windows | ARM64 | `windows-arm64.zip` |
 | Linux | x64 | `linux-x86_64.zip` |
 | Linux | ARM64 | `linux-arm64.zip` |
 | macOS | Intel | `macos-x86_64.zip` |

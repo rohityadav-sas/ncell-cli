@@ -22,6 +22,9 @@ jobs:
           - os: windows-latest
             platform: windows-x86_64
             binary: ncell.exe
+          - os: windows-11-arm
+            platform: windows-arm64
+            binary: ncell.exe
           - os: ubuntu-22.04
             platform: linux-x86_64
             binary: ncell
