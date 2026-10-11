@@ -1,7 +1,14 @@
 mod cli;
 use clap::Parser;
 fn main() -> std::process::ExitCode {
-    let args = cli::Args::parse();
+    let args = match cli::Args::try_parse() {
+        Ok(args) => args,
+        Err(error) if error.kind() == clap::error::ErrorKind::DisplayHelp => {
+            print!("{}", error.to_string().replace("\n      --", "\n  --"));
+            return std::process::ExitCode::SUCCESS;
+        }
+        Err(error) => error.exit(),
+    };
     let json = args.json;
     match cli::run(args) {
         Ok(()) => std::process::ExitCode::SUCCESS,
