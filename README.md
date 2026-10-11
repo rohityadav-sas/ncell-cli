@@ -23,14 +23,14 @@ winget install --id RohitYadav.NcellCLI --exact
 
 ```powershell
 scoop bucket add ncell-cli https://github.com/rohityadav-sas/ncell-cli
-scoop install ncell-cli/ncell-cli
+scoop install ncell-cli
 ```
 
 **Homebrew (macOS / Linux)**
 
 ```sh
 brew tap rohityadav-sas/ncell-cli https://github.com/rohityadav-sas/ncell-cli
-brew install rohityadav-sas/ncell-cli/ncell-cli
+brew install ncell-cli
 ```
 
 ## A few commands

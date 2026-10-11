@@ -18,7 +18,7 @@ The repository itself is a bucket. The manifest is `bucket/ncell-cli.json`.
 
 ```powershell
 scoop bucket add ncell-cli https://github.com/rohityadav-sas/ncell-cli
-scoop install ncell-cli/ncell-cli
+scoop install ncell-cli
 ```
 
 Scoop was not installed on the publishing machine. The Windows archive check is configured in CI; a full Scoop installation was not run here. No central-bucket approval is needed to use this custom bucket.
@@ -29,7 +29,7 @@ The repository itself is a custom tap. Specify its remote URL because its name d
 
 ```sh
 brew tap rohityadav-sas/ncell-cli https://github.com/rohityadav-sas/ncell-cli
-brew install rohityadav-sas/ncell-cli/ncell-cli
+brew install ncell-cli
 ```
 
 The formula builds the MIT-licensed source commit `eceb12d` with Cargo. The archive checksum is pinned. This is a custom tap, not a homebrew/core listing. The macOS Homebrew installation and formula tests passed in run 38167412633. Linux additionally needs a working Secret Service at runtime.
