@@ -217,8 +217,11 @@
             <path
                 d="M6.766 11.328c-2.063-.25-3.516-1.734-3.516-3.656 0-.781.281-1.625.75-2.188-.203-.515-.172-1.609.063-2.062.625-.078 1.468.25 1.968.703.594-.187 1.219-.281 1.985-.281.765 0 1.39.094 1.953.265.484-.437 1.344-.765 1.969-.687.218.422.25 1.515.046 2.047.5.593.766 1.39.766 2.203 0 1.922-1.453 3.375-3.547 3.64.531.344.89 1.094.89 1.954v1.625c0 .468.391.734.86.547C13.781 14.359 16 11.53 16 8.03 16 3.61 12.406 0 7.984 0 3.563 0 0 3.61 0 8.031a7.88 7.88 0 0 0 5.172 7.422c.422.156.828-.125.828-.547v-1.25c-.219.094-.5.156-.75.156-1.031 0-1.64-.562-2.078-1.609-.172-.422-.36-.672-.719-.719-.187-.015-.25-.093-.25-.187 0-.188.313-.328.625-.328.453 0 .844.281 1.25.86.313.452.64.655 1.031.655s.641-.14 1-.5c.266-.265.47-.5.657-.656" />
         </symbol>
+        <symbol id="i-chevron-down" viewBox="0 0 24 24">
+            <path d="m6 9 6 6 6-6" />
+        </symbol>
     </svg>
-    <a class="skip" href="index.html#content">Skip to content</a>
+    <a class="skip" href="#content">Skip to content</a>
 
     <header class="header">
         <div class="header-inner">
@@ -310,14 +313,45 @@
     <main>
         <article id="content">
 
-<p class="reference-eyebrow">NCELL-CLI / REFERENCE</p>
 <h1 id="response-codes">Response codes</h1>
-<p class="lead">255 source-defined message mappings and 16 additional constants with unconfirmed meanings.</p>
-<p>These are labels recovered from the supplied Android app, not a complete specification of the server. The server may return a more specific <code>responseDesc</code>: for example, <code>BIL2006</code> maps to “Product Subscription not success,” while a captured response reported a duplicate subscription request.</p>
-<div class="callout"><p><strong>CLI output:</strong> plain-text API errors include the HTTP status, response code and its mapped meaning. Unmapped codes are explicitly marked unconfirmed or unavailable. <code>--json</code> preserves the server response, including its message. Successful subscriptions print <code>Subscribed to &lt;plan name&gt;.</code></p></div>
-<div class="reference-filters"><label>Search codes or meanings<input id="code-search" type="search" placeholder="BIL1000, expired, balance…"></label><label>Code prefix<select id="code-prefix"><option value="">All prefixes</option><option>ACM</option><option>BAL</option><option>BIL</option><option>BSAM</option><option>BSS</option><option>BTF</option><option>CAU</option><option>CL</option><option>CLM</option><option>CNST</option><option>CPM</option><option>DVS</option><option>HIS</option><option>HNM</option><option>IMG</option><option>LCM</option><option>LGN</option><option>LNG</option><option>LYT</option><option>MFV</option><option>MRG</option><option>OCR</option><option>OPS</option><option>OTP</option><option>PMT</option><option>PSU</option><option>QAP</option><option>QDP</option><option>RE</option><option>RFB</option><option>RFM</option><option>SM</option><option>SMS</option><option>SPT</option><option>SUB</option><option>SUR</option></select></label></div>
-<p id="code-count" role="status">271 codes</p>
-<div class="table-wrap"><table><thead><tr><th scope="col">Code</th><th scope="col">App message</th></tr></thead><tbody id="code-rows"><tr data-prefix="ACM"><td><code>ACM1001</code></td><td>Transactions not found in given date range</td></tr>
+            <p class="lead">255 source-defined message mappings and 16 additional constants with unconfirmed meanings.</p>
+
+            <div class="callout callout-warning">
+                <svg class="ico" aria-hidden="true"><use href="#i-triangle-alert" /></svg>
+                <div>
+                    <p class="callout-title">Not a complete specification</p>
+                    <p>These labels were recovered from the supplied Android app. The server may return a more specific <code>responseDesc</code>: for example, <code>BIL2006</code> maps to &ldquo;Product Subscription not success,&rdquo; while a captured response reported a duplicate subscription request.</p>
+                </div>
+            </div>
+            <div class="callout">
+                <svg class="ico" aria-hidden="true"><use href="#i-info" /></svg>
+                <div>
+                    <p class="callout-title">CLI output</p>
+                    <p>Plain-text API errors include the HTTP status, response code and its mapped meaning. Unmapped codes are explicitly marked unconfirmed or unavailable. <code>--json</code> preserves the server response, including its message. Successful subscriptions print <code>Subscribed to &lt;plan name&gt;.</code></p>
+                </div>
+            </div>
+
+            <h2 id="lookup">Look up a code</h2>
+            <div class="reference-filters">
+                <div class="field">
+                    <label class="field-label" for="code-search">Search codes or meanings</label>
+                    <div class="field-control search-control">
+                        <svg class="ico" aria-hidden="true"><use href="#i-search" /></svg>
+                        <input id="code-search" type="search" placeholder="Try BIL1000 or insufficient balance" autocomplete="off" spellcheck="false" aria-controls="code-rows">
+                        <button id="clear-code-search" type="button" class="search-clear" aria-label="Clear search" hidden>×</button>
+                    </div>
+                </div>
+                <div class="field prefix-field">
+                    <span class="field-label" id="prefix-label">Code prefix</span>
+                    <button id="code-prefix" type="button" class="prefix-trigger" role="combobox" aria-labelledby="prefix-label prefix-value" aria-haspopup="listbox" aria-expanded="false" aria-controls="prefix-options">
+                        <span id="prefix-value">All prefixes</span>
+                        <svg class="ico" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+                    </button>
+                    <div id="prefix-options" class="prefix-options" role="listbox" aria-labelledby="prefix-label" hidden></div>
+                </div>
+            </div>
+            <p id="code-count" class="caption" role="status">271 codes</p>
+            <div class="table-wrap"><table><thead><tr><th scope="col">Code</th><th scope="col">App message</th></tr></thead><tbody id="code-rows"><tr data-prefix="ACM"><td><code>ACM1001</code></td><td>Transactions not found in given date range</td></tr>
 <tr data-prefix="ACM"><td><code>ACM2001</code></td><td>From and To date cannot be a future date</td></tr>
 <tr data-prefix="ACM"><td><code>ACM2010</code></td><td>Your OTP expired. Please insert the new OTP</td></tr>
 <tr data-prefix="BAL"><td><code>BAL1000</code></td><td>Operation Successful</td></tr>
@@ -588,9 +622,13 @@
 <tr data-prefix="SUR"><td><code>SUR2000</code></td><td>Invalid request</td></tr>
 <tr data-prefix="SUR"><td><code>SUR3000</code></td><td>An unexpected error occurred.Please try again later</td></tr>
 <tr data-prefix="SUR"><td><code>SUR4000</code></td><td>An unexpected error occurred.Please try again later</td></tr></tbody></table></div>
-<p id="code-empty" hidden>No matching codes.</p>
-<details><summary>Source and limitations</summary><p>Extracted from the supplied <code>index.android.bundle</code> (Hermes bytecode). English message object at disassembly line 2135255. SHA-256: <code class="source-hash">e06d3d62ea59888644234781f3eaf8599b8916aac96b1bf1d80eb2675c561a22</code>.</p><p>Message wording is retained from the app. Unmapped constants are marked unconfirmed; empty and null mappings are identified explicitly. Prefixes are grouping labels, not confirmed acronym expansions. No live requests or purchases were made to derive this reference.</p></details>
-<p><a href="index.html#commands">← Command reference</a></p>
+<p id="code-empty" class="empty" hidden>No matching codes. Try a shorter search or clear the prefix filter.</p>
+
+            <h2 id="source">Source and limitations</h2>
+            <p>Extracted from the supplied <code>index.android.bundle</code> (Hermes bytecode). The English message object is at disassembly line 2135255. SHA-256 of the bundle:</p>
+            <pre data-lang="Text"><code>e06d3d62ea59888644234781f3eaf8599b8916aac96b1bf1d80eb2675c561a22</code></pre>
+            <p>Message wording is retained from the app. Unmapped constants are marked unconfirmed; empty and null mappings are identified explicitly. Prefixes are grouping labels, not confirmed acronym expansions. No live requests or purchases were made to derive this reference.</p>
+            <p><a href="index.html#commands">&larr; Command reference</a></p>
 
         </article>
 

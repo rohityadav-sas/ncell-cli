@@ -1,9 +1,39 @@
-.reference-eyebrow { color: var(--accent); font-size: 12px; letter-spacing: 2px; }
-.reference-filters { display: flex; gap: 16px; margin-top: 28px; }
-.reference-filters label { display: grid; gap: 8px; flex: 1; color: var(--text-2); font-size: 14px; }
-.reference-filters input, .reference-filters select { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-subtle); color: var(--text); font: inherit; }
-.reference-filters input:focus-visible, .reference-filters select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.source-hash { overflow-wrap: anywhere; }
+/* Response-code lookup controls use the shared documentation theme. */
+.reference-filters { display: grid; margin: 0 0 14px; }
+.field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.field-label { color: var(--text); font-size: 13px; font-weight: 650; line-height: 1.4; }
+.field-control { position: relative; display: flex; align-items: center; }
+.field-control > .ico { position: absolute; pointer-events: none; }
+.field-control input { width: 100%; color: var(--text); font-size: 14px; border: 1px solid var(--border); transition: border-color .15s; }
+.field-control input::placeholder { color: var(--muted); }
+.field-control input:hover { border-color: var(--border-strong); }
+#code-count { margin: 0 0 12px; }
+.table-wrap th:first-child { width: 1%; }
 #code-rows td:first-child { white-space: nowrap; }
-details { margin: 24px 0; padding: 16px; border: 1px solid var(--border); border-radius: 12px; }
-@media (max-width: 600px) { .reference-filters { flex-direction: column; } }
+#code-rows tr.unconfirmed td:last-child { color: var(--muted); font-style: italic; }
+.empty { margin: 0 0 20px; padding: 28px 16px; border: 1px dashed var(--border-strong); border-radius: 12px; color: var(--muted); font-size: 14px; text-align: center; }
+
+.reference-filters { grid-template-columns: minmax(0, 1fr) 220px; gap: 18px; }
+.search-control { border-radius: 12px; transition: box-shadow .15s; }
+.search-control input { height: 48px; padding: 0 44px; border-radius: 12px; background: var(--bg); }
+.search-control > .ico { left: 15px; transition: color .15s; }
+.search-control:focus-within { box-shadow: 0 0 0 4px var(--accent-tint); }
+.search-control:focus-within > .ico { color: var(--accent); }
+.search-control input:focus { outline: none; border-color: var(--accent); }
+.search-control input::-webkit-search-cancel-button { display: none; }
+.search-clear { position: absolute; right: 10px; width: 28px; height: 28px; border: 0; border-radius: 7px; background: var(--bg-muted); color: var(--muted); font-size: 21px; line-height: 1; cursor: pointer; }
+.search-clear:hover { color: var(--accent); background: var(--accent-tint); }
+.prefix-field { position: relative; }
+.prefix-trigger { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; height: 48px; padding: 0 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); color: var(--text); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.prefix-trigger:hover { border-color: var(--border-strong); }
+.prefix-trigger[aria-expanded="true"] { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-tint); }
+.prefix-trigger .ico { color: var(--muted); transition: transform .15s; }
+.prefix-trigger[aria-expanded="true"] .ico { transform: rotate(180deg); }
+.prefix-options { position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 20; max-height: 320px; overflow-y: auto; padding: 6px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg); box-shadow: var(--shadow); scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; overscroll-behavior: contain; }
+.prefix-option { display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 8px; color: var(--text-2); font-size: 14px; cursor: pointer; }
+.prefix-option.active, .prefix-option:hover { background: var(--accent-tint); color: var(--accent); }
+.prefix-option[aria-selected="true"] { font-weight: 650; color: var(--accent); }
+.prefix-option[aria-selected="true"]::after { content: '✓'; }
+.prefix-option .prefix-count { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+@media (max-width: 600px) { .reference-filters { grid-template-columns: 1fr; } .prefix-options { max-height: 260px; } }
+@media (prefers-reduced-motion: reduce) { .search-control, .search-control > .ico, .prefix-trigger .ico { transition: none; } }
