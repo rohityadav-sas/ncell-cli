@@ -4,13 +4,13 @@ The Windows ZIP contains `ncell.exe` and the MIT license. Its checksum is pinned
 
 ## WinGet
 
-`winget/0.1.0/` contains the validated manifest set for `RohitYadav.NcellCLI`. Community-source availability requires Microsoft to merge the submission. After acceptance:
+`winget/0.1.0/` contains the validated manifest set for `RohitYadav.NcellCLI`. Submission: https://github.com/microsoft/winget-pkgs/pull/450764. Community-source availability requires Microsoft to merge the submission. The owner must review and accept Microsoft's CLA in the bot comment before the submission can proceed. After acceptance:
 
 ```powershell
 winget install --id RohitYadav.NcellCLI --exact
 ```
 
-Validate locally with `winget validate --manifest packaging/winget/0.1.0`. Installation from a local manifest requires the administrator-controlled `LocalManifestFiles` setting. This setting was not changed during publishing; the local install test was blocked by it. The downloaded ZIP was separately checksum-checked, extracted, and its executable tested with `--version` and `--help`.
+Validate locally with `winget validate --manifest packaging/winget/0.1.0`. Installation from a local manifest requires the administrator-controlled `LocalManifestFiles` setting. This setting was not changed during publishing; the local install test was blocked by it. A Windows CI job downloads the published ZIP, checks its checksum and MIT license, and tests the executable with `--version` and `--help`. Local download checks timed out, so use the CI result for that verification.
 
 ## Scoop
 
@@ -21,7 +21,7 @@ scoop bucket add ncell-cli https://github.com/rohityadav-sas/ncell-cli
 scoop install ncell-cli/ncell-cli
 ```
 
-Scoop was not installed on the publishing machine. The package's ZIP contents and checksum were checked, but a full Scoop installation was not run here. No central-bucket approval is needed to use this custom bucket.
+Scoop was not installed on the publishing machine. The Windows archive check is configured in CI; a full Scoop installation was not run here. No central-bucket approval is needed to use this custom bucket.
 
 ## Homebrew
 
@@ -50,3 +50,4 @@ Once published, users can run `cargo install ncell-cli --locked`. Until then, us
 ## Updating
 
 For each new release, update the Cargo version, publish a new versioned ZIP, then update WinGet/Scoop versions, URLs and SHA-256 hashes. Update the Homebrew source reference, version and archive hash. Validate manifests and test the package before submitting another WinGet pull request. Release assets should remain immutable after package-manager publication.
+

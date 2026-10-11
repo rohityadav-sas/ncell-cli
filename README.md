@@ -43,7 +43,7 @@ brew tap rohityadav-sas/ncell-cli https://github.com/rohityadav-sas/ncell-cli
 brew install rohityadav-sas/ncell-cli/ncell-cli
 ```
 
-WinGet is being submitted as `RohitYadav.NcellCLI`; it is not yet available in the community source. crates.io publishing is pending authentication. See the [packaging guide](packaging/README.md).
+WinGet [submission #450764](https://github.com/microsoft/winget-pkgs/pull/450764) is pending for `RohitYadav.NcellCLI`; it is not yet available in the community source. crates.io publishing is pending authentication. See the [packaging guide](packaging/README.md).
 
 ## A few commands
 
@@ -69,6 +69,7 @@ cargo test --locked
 Documentation lives in `docs/`, built with plain HTML, CSS and JavaScript. GitHub Actions deploys it to Pages. Local integration tests and the optional Android token bridge are excluded from this repository.
 
 An independent project for Ncell Nepal. Not affiliated with or endorsed by Ncell.
+
 
 
 
