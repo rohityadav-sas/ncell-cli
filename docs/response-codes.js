@@ -86,5 +86,9 @@
   trigger.addEventListener('blur', close);
   search.addEventListener('input', filter);
   clear.addEventListener('click', () => { search.value = ''; filter(); search.focus(); });
+  addEventListener('response-code-selected', event => {
+    const row = document.getElementById(event.detail);
+    if (row?.hidden) { search.value = ''; choose(0); }
+  });
   filter();
 })();

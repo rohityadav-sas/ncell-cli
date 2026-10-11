@@ -37,3 +37,14 @@
 .prefix-option .prefix-count { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 @media (max-width: 600px) { .reference-filters { grid-template-columns: 1fr; } .prefix-options { max-height: 260px; } }
 @media (prefers-reduced-motion: reduce) { .search-control, .search-control > .ico, .prefix-trigger .ico { transition: none; } }
+
+/* Fade and zoom like a shadcn popover, including its closing transition. */
+.prefix-options { transform-origin: top center; transition: opacity .14s ease, transform .14s ease, display .14s allow-discrete; }
+.prefix-options[hidden] { display: none; opacity: 0; transform: translateY(-5px) scale(.97); }
+.prefix-options:not([hidden]) { opacity: 1; transform: translateY(0) scale(1); }
+@starting-style { .prefix-options:not([hidden]) { opacity: 0; transform: translateY(-5px) scale(.97); } }
+.prefix-option { transition: color .1s, background-color .1s; }
+@media (prefers-reduced-motion: reduce) { .prefix-options, .prefix-option { transition: none; } }
+
+#code-rows tr { scroll-margin-top: calc(var(--header-h) + 24px); }
+#code-rows tr:target td { background: var(--accent-tint); }

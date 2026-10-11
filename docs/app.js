@@ -64,22 +64,36 @@
     return [link.hash.slice(1), use ? use.getAttribute('href').slice(3) : 'hash'];
   }));
   const index = [];
-  let currentEntry = null;
-  let currentSection = '';
-  for (const el of article.children) {
-    if (/^H[123]$/.test(el.tagName)) {
-      const title = el.textContent.trim();
-      if (el.tagName !== 'H3') currentSection = title;
-      currentEntry = { id: el.id, title, section: currentSection, text: '' };
-      index.push(currentEntry);
-    } else if (currentEntry) {
-      currentEntry.text += ' ' + el.textContent;
+  function indexPage(doc, page) {
+    const content = doc.querySelector('#content');
+    content.querySelectorAll('h1, h2, h3').forEach((heading, i) => {
+      if (!heading.id) heading.id = 'topic-' + i;
+    });
+    let entry = null, section = '';
+    for (const el of content.children) {
+      if (/^H[123]$/.test(el.tagName)) {
+        const title = el.textContent.trim();
+        if (el.tagName !== 'H3') section = title;
+        entry = { id: el.id, url: page + '#' + el.id, title, section, text: '' };
+        index.push(entry);
+      } else if (entry && !el.querySelector('#code-rows')) entry.text += ' ' + el.textContent;
+    }
+    for (const row of content.querySelectorAll('#code-rows tr')) {
+      const code = row.cells[0].textContent.trim();
+      index.push({ id: code, url: page + '#' + code, title: code, section: 'Response codes', text: row.cells[1].textContent, icon: 'info' });
+    }
+    for (const item of index) {
+      item.text = item.text.replace(/\s+/g, ' ').trim();
+      item.textLower = item.text.toLowerCase();
     }
   }
-  for (const entry of index) {
-    entry.text = entry.text.replace(/\s+/g, ' ').trim();
-    entry.textLower = entry.text.toLowerCase();
-  }
+  indexPage(document, '');
+  const otherPage = article.querySelector('#code-rows') ? 'index.html' : 'response-codes.html';
+  let searchUnavailable = false;
+  const searchReady = fetch(otherPage)
+    .then(response => { if (!response.ok) throw new Error('Search page unavailable'); return response.text(); })
+    .then(html => indexPage(new DOMParser().parseFromString(html, 'text/html'), otherPage))
+    .catch(() => { searchUnavailable = true; });
 
   /* ---------- Heading anchors ---------- */
   for (const heading of article.querySelectorAll('h2[id], h3[id]')) {
@@ -242,7 +256,7 @@
     setActive(-1);
     if (!query) {
       status.className = 'search-hint';
-      status.textContent = 'Type to search the documentation.';
+      status.textContent = searchUnavailable ? 'Other page unavailable; searching this page only.' : 'Search documentation and response codes.';
       return;
     }
     results = runSearch(query);
@@ -259,11 +273,11 @@
       li.setAttribute('role', 'option');
 
       const a = document.createElement('a');
-      a.href = '#' + entry.id;
+      a.href = entry.url;
 
       const tile = document.createElement('span');
       tile.className = 'result-icon';
-      tile.append(icon(navIcons.get(entry.id) || 'hash'));
+      tile.append(icon(entry.icon || navIcons.get(entry.id) || 'hash'));
 
       const body = document.createElement('span');
       body.className = 'result-text';
@@ -283,7 +297,10 @@
       body.append(excerpt);
 
       a.append(tile, body);
-      a.addEventListener('click', () => dialog.close());
+      a.addEventListener('click', () => {
+        dialog.close();
+        if (entry.icon === 'info' && entry.url.startsWith('#')) dispatchEvent(new CustomEvent('response-code-selected', { detail: entry.id }));
+      });
       li.append(a);
       list.append(li);
     });
@@ -291,13 +308,15 @@
     setActive(0);
   }
 
-  function openSearch() {
+  async function openSearch() {
     setMenu(false);
     if (dialog.open) { input.select(); return; }
     dialog.showModal();
     input.value = '';
     render();
     input.focus();
+    await searchReady;
+    if (dialog.open) render();
   }
 
   $('#search-btn').addEventListener('click', openSearch);
