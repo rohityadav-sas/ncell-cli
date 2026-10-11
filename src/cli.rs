@@ -292,7 +292,10 @@ pub fn run(args: Args) -> Result<()> {
                     .max()
                     .unwrap_or(4)
                     .max(4);
-                println!("{:<6}  {:<width$}  {:>12}  Validity", "ID", "Plan", "Price");
+                println!(
+                    "{:<6}  {:<width$}  {:>12}  {:>10}",
+                    "ID", "Plan", "Price", "Validity"
+                );
                 println!("{}", "-".repeat(width + 38));
                 for plan in plans {
                     let price = &plan["productOfferingPrice"];
@@ -304,12 +307,15 @@ pub fn run(args: Args) -> Result<()> {
                         format!("Rs. {amount}")
                     };
                     println!(
-                        "{:<6}  {:<width$}  {:>12}  {} {}",
+                        "{:<6}  {:<width$}  {:>12}  {:>10}",
                         text(&plan["id"]),
                         text(&plan["displayInfo"]["displayName"]).trim(),
                         price,
-                        text(&plan["techInfo"]["validity"]),
-                        text(&plan["techInfo"]["validityUom"])
+                        format!(
+                            "{} {}",
+                            text(&plan["techInfo"]["validity"]),
+                            text(&plan["techInfo"]["validityUom"])
+                        )
                     );
                 }
             } else if profile {
