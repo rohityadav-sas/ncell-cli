@@ -78,9 +78,9 @@
         index.push(entry);
       } else if (entry && !el.querySelector('#code-rows')) entry.text += ' ' + el.textContent;
     }
-    for (const row of content.querySelectorAll('#code-rows tr')) {
+    for (const row of content.querySelectorAll('#code-rows tr[data-prefix]')) {
       const code = row.cells[0].textContent.trim();
-      index.push({ id: code, url: page + '#' + code, title: code, section: 'Response codes', text: row.cells[1].textContent, icon: 'info' });
+      index.push({ id: code, url: page + '#' + code, title: code, section: 'Response codes · ' + row.dataset.prefix, text: row.cells[1].textContent, icon: 'info' });
     }
     for (const item of index) {
       item.text = item.text.replace(/\s+/g, ' ').trim();
@@ -299,7 +299,6 @@
       a.append(tile, body);
       a.addEventListener('click', () => {
         dialog.close();
-        if (entry.icon === 'info' && entry.url.startsWith('#')) dispatchEvent(new CustomEvent('response-code-selected', { detail: entry.id }));
       });
       li.append(a);
       list.append(li);
