@@ -311,42 +311,13 @@
 
     <main>
         <article id="content">
-
             <h1 id="response-codes">Response codes</h1>
-            <div class="reference-filters">
-                <div class="field">
-                    <label class="field-label" for="code-search">Search</label>
-                    <div class="field-control search-control">
-                        <svg class="ico" aria-hidden="true">
-                            <use href="#i-search" />
-                        </svg>
-                        <input id="code-search" type="search" placeholder="Try BIL1000 or insufficient balance"
-                            autocomplete="off" spellcheck="false" aria-controls="code-rows">
-                        <button id="clear-code-search" type="button" class="search-clear" aria-label="Clear search"
-                            hidden>×</button>
-                    </div>
-                </div>
-                <div class="field prefix-field">
-                    <span class="field-label" id="prefix-label">Code prefix</span>
-                    <button id="code-prefix" type="button" class="prefix-trigger" role="combobox"
-                        aria-labelledby="prefix-label prefix-value" aria-haspopup="listbox" aria-expanded="false"
-                        aria-controls="prefix-options">
-                        <span id="prefix-value">All prefixes</span>
-                        <svg class="ico" aria-hidden="true">
-                            <use href="#i-chevron-down" />
-                        </svg>
-                    </button>
-                    <div id="prefix-options" class="prefix-options" role="listbox" aria-labelledby="prefix-label"
-                        hidden></div>
-                </div>
-            </div>
-            <p id="code-count" class="caption" role="status">271 codes</p>
             <div class="table-wrap">
                 <table>
                     <thead>
                         <tr>
                             <th scope="col">Code</th>
-                            <th scope="col">App message</th>
+                            <th scope="col">Meaning</th>
                         </tr>
                     </thead>
                     <tbody id="code-rows">
