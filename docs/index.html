@@ -509,9 +509,9 @@ ncell plans subscribe 984 --category 50</code></pre>
                 <code>--sort</code> changes ordering (default price ascending). Sort keys accept commas or repeated
                 <code>--sort</code> options, with optional <code>:asc</code> or <code>:desc</code>.</p>
             <h3>Game rewards</h3>
-            <p><code>ncell game tasks</code> lists task IDs, progress, token and XP rewards, reset periods, and status. Use an ID from this list with <code>game claim-task</code>. Listing tasks does not claim rewards; <code>--json</code> includes the full response and summary.</p>
-            <pre data-lang="Shell"><code>ncell game tasks
-ncell game tasks --json
+            <p><code>ncell game status</code> lists task IDs, progress, token and XP rewards, reset periods, and status. Use an ID from this list with <code>game claim-task</code>. Listing tasks does not claim rewards; <code>--json</code> includes the full response and summary.</p>
+            <pre data-lang="Shell"><code>ncell game status
+ncell game status --json
 ncell game check-in
 ncell game claim-task 1,2,3
 ncell game claim-task 1 2 3 --json</code></pre>
@@ -558,7 +558,7 @@ ncell game claim-task 1 2 3 --json</code></pre>
                             <td>List catalog categories</td>
                         </tr>
                         <tr>
-                            <td><code>game tasks</code></td>
+                            <td><code>game status</code></td>
                             <td>List tasks, progress and rewards</td>
                         </tr>
                         <tr>

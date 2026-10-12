@@ -105,7 +105,7 @@ enum SmsCommand {
 #[derive(Subcommand)]
 enum GameCommand {
     /// List game tasks, rewards and current progress.
-    Tasks,
+    Status,
     /// Claim the daily check-in reward.
     CheckIn,
     /// Claim completed tasks in order; accepts comma-separated IDs.
@@ -142,7 +142,7 @@ pub fn run(args: Args) -> Result<()> {
                 client.check_in_url(&account.msisdn, &account.access_token)
             })?;
             let id = match action {
-                GameCommand::Tasks => {
+                GameCommand::Status => {
                     let response = ncell_cli::api::game_tasks(&url)?;
                     if args.json {
                         println!("{response:#}");
@@ -652,7 +652,7 @@ mod tests {
             vec!["plans", "subscribe", "1225"],
             vec!["refresh"],
             vec!["game", "check-in"],
-            vec!["game", "tasks"],
+            vec!["game", "status"],
             vec!["game", "claim-task", "1,2,3"],
         ] {
             let args =

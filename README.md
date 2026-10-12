@@ -18,7 +18,7 @@ ncell balance
 ncell plans categories
 ncell plans --category 50
 ncell plans subscribe 984 --category 50
-ncell game tasks
+ncell game status
 ncell game check-in
 ncell game claim-task 1,2,3
 ncell --help
