@@ -6,6 +6,7 @@ use ncell_cli::{
     session::{Account, KeyringStore, SessionStore},
 };
 use serde_json::{Value, json};
+use std::io::{self, Write};
 
 #[derive(Parser)]
 #[command(
@@ -244,7 +245,12 @@ pub fn run(args: Args) -> Result<()> {
                     "OTP requested. Check your SMS. To resume later: ncell login {number} --verify"
                 );
             }
-            let otp = rpassword::prompt_password("Enter OTP: ").map_err(|_| Error::Prompt)?;
+            eprint!("Enter OTP: ");
+            io::stderr().flush().map_err(|_| Error::Prompt)?;
+            let mut otp = String::new();
+            if io::stdin().read_line(&mut otp).map_err(|_| Error::Prompt)? == 0 {
+                return Err(Error::Prompt);
+            }
             auth.verify_otp(&number, otp.trim())?;
             output(
                 args.json,
