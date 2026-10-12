@@ -8,6 +8,7 @@ use ncell_cli::{
 };
 use serde_json::{Value, json};
 use std::io::{self, Write};
+use std::time::Duration;
 
 #[derive(Parser)]
 #[command(
@@ -105,8 +106,15 @@ enum SmsCommand {
 
 #[derive(Subcommand)]
 enum GameCommand {
-    /// Spin the wheel once. Costs game tokens.
-    Spin,
+    /// Spin the wheel. Each spin costs game tokens; stops on the first failure.
+    Spin {
+        /// Number of spins.
+        #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..))]
+        count: u32,
+        /// Wait between spins: seconds by default, or use s, m, h (e.g. 1.5s).
+        #[arg(long, default_value = "0", value_parser = parse_delay)]
+        delay: Duration,
+    },
     /// Show weekly ranks, performance and prizes.
     Ranks,
     /// List game tasks, rewards and current progress.
@@ -140,6 +148,21 @@ fn parse_sort(value: &str) -> std::result::Result<(Sort, bool), String> {
     }
 }
 
+fn parse_delay(value: &str) -> std::result::Result<Duration, String> {
+    let (number, multiplier) = match value.as_bytes().last() {
+        Some(b's') => (&value[..value.len() - 1], 1.0),
+        Some(b'm') => (&value[..value.len() - 1], 60.0),
+        Some(b'h') => (&value[..value.len() - 1], 3600.0),
+        _ => (value, 1.0),
+    };
+    number
+        .parse::<f64>()
+        .ok()
+        .filter(|seconds| seconds.is_finite() && *seconds >= 0.0)
+        .and_then(|seconds| Duration::try_from_secs_f64(seconds * multiplier).ok())
+        .ok_or_else(|| "Delay must be a nonnegative duration: 1.5, 1.5s, 2m, or 1.5h".into())
+}
+
 pub fn run(args: Args) -> Result<()> {
     match args.command {
         Command::Game { action } => {
@@ -147,15 +170,21 @@ pub fn run(args: Args) -> Result<()> {
                 client.check_in_url(&account.msisdn, &account.access_token)
             })?;
             let id = match action {
-                GameCommand::Spin => {
-                    let response = ncell_cli::api::game_spin(&url)?;
-                    let message = format!(
-                        "Spin reward: {} | Tokens {} | Points {}",
-                        text(&response["description"]),
-                        formatted_number(&response["new_token_balance"]),
-                        formatted_number(&response["new_week_points"])
-                    );
-                    output(args.json, response, message);
+                GameCommand::Spin { count, delay } => {
+                    for index in 0..count {
+                        if index > 0 {
+                            std::thread::sleep(delay);
+                        }
+                        let response = ncell_cli::api::game_spin(&url)?;
+                        let message = format!(
+                            "Spin reward: {} | Tokens {} | Points {}",
+                            text(&response["description"]),
+                            formatted_number(&response["new_token_balance"]),
+                            formatted_number(&response["new_week_points"])
+                        );
+                        output(args.json, response, message);
+                        io::stdout().flush().map_err(|_| Error::InvalidResponse)?;
+                    }
                     return Ok(());
                 }
                 GameCommand::Ranks => {
@@ -732,6 +761,32 @@ mod tests {
             vec!["plans", "categories", "--sort", "price"],
         ] {
             assert!(Args::try_parse_from(std::iter::once("ncell").chain(command)).is_err());
+        }
+    }
+
+    #[test]
+    fn spin_count_and_delay_accept_units_and_reject_invalid_values() {
+        for (input, seconds) in [
+            ("0", 0.0),
+            ("1.5", 1.5),
+            ("1.5s", 1.5),
+            ("2m", 120.0),
+            ("1.5h", 5400.0),
+        ] {
+            assert_eq!(
+                parse_delay(input).unwrap(),
+                Duration::from_secs_f64(seconds)
+            );
+            assert!(
+                Args::try_parse_from(["ncell", "game", "spin", "--count", "3", "--delay", input])
+                    .is_ok()
+            );
+        }
+        for input in ["-1", "NaN", "inf", "1e100", "1ms", "1h30m", "", "s"] {
+            assert!(parse_delay(input).is_err());
+        }
+        for count in ["0", "-1", "1.5"] {
+            assert!(Args::try_parse_from(["ncell", "game", "spin", "--count", count]).is_err());
         }
     }
 
