@@ -476,7 +476,7 @@ fn print_tasks(response: &Value) -> Result<()> {
             _ => Style::new(),
         };
         anstream::println!(
-            "{:<6}  {:<width$}  {:>9}  {:>6}  {:>6}  {:<8}  {style}{status}{style:#}",
+            "{style}{:<6}  {:<width$}  {:>9}  {:>6}  {:>6}  {:<8}  {status}{style:#}",
             task["id"].to_string(),
             text(&task["title"]),
             progress,
