@@ -150,11 +150,6 @@ Download the ZIP archive for your platform from [Releases](<https://github.com/r
    chmod +x ncell
    ./ncell --help
 ```
-
-3. (Optional) Add the directory containing the executable to your `PATH` to run `ncell` from anywhere.
-
-
-
 Linux credential storage requires an unlocked Secret Service provider, such as GNOME Keyring or KWallet with Secret Service enabled.
 
-All platforms use the `ncell-cli` credential service. Windows automatically migrates previously saved `ncell-cli-v2` accounts once. Account-changing commands and token refreshes share a storage lock; overlapping commands ask you to retry. Credential writes are read back before success is reported.
+3. (Optional) Add the directory containing the executable to your `PATH` to run `ncell` from anywhere.
