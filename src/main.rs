@@ -14,7 +14,9 @@ fn main() -> std::process::ExitCode {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
             if json {
-                if let ncell_cli::error::Error::Api { response, .. } = &error {
+                if let ncell_cli::error::Error::Api { response, .. }
+                | ncell_cli::error::Error::CheckIn { response, .. } = &error
+                {
                     println!("{response:#}");
                 } else {
                     eprintln!("{}", serde_json::json!({"error": error.to_string()}));

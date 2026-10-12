@@ -18,6 +18,12 @@ pub enum Error {
         code: String,
         response: Box<serde_json::Value>,
     },
+    #[error("{message} (HTTP {status})")]
+    CheckIn {
+        message: String,
+        status: u16,
+        response: Box<serde_json::Value>,
+    },
     #[error("Credential storage is unavailable or locked; unlock your system keyring and retry")]
     Storage,
     #[error("Saved session is invalid; run `ncell logout` to reset it")]

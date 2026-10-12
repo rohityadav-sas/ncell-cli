@@ -45,7 +45,7 @@ enum Command {
     Balance,
     /// Query the subscriber profile; use --json for all details.
     Profile,
-    /// Generate the authenticated daily check-in link. Does not claim a reward.
+    /// Claim the daily check-in reward.
     CheckIn,
     /// Send a free SMS to a Nepal mobile number.
     SendFreeSms { number: String, text: String },
@@ -122,7 +122,14 @@ pub fn run(args: Args) -> Result<()> {
             let url = authenticated(|client, account, _| {
                 client.check_in_url(&account.msisdn, &account.access_token)
             })?;
-            output(args.json, json!({"url": url}), &url);
+            let response = ncell_cli::api::check_in(&url)?;
+            let message = format!(
+                "Check-in successful. Streak: {} days. Weekly points: {}. Game tokens: {}.",
+                response["data"]["current_streak"],
+                response["data"]["weekly_points"],
+                response["data"]["game_tokens"]
+            );
+            output(args.json, response, message);
         }
         Command::SendFreeSms { number, text } => {
             let response = authenticated(|client, account, _| {
