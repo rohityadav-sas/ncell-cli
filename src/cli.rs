@@ -7,8 +7,8 @@ use ncell_cli::{
     session::{Account, KeyringStore, SessionStore},
 };
 use serde_json::{Value, json};
-use std::io::{self, Write};
-use std::time::Duration;
+use std::io::{self, IsTerminal, Write};
+use std::time::{Duration, Instant};
 
 #[derive(Parser)]
 #[command(
@@ -182,9 +182,16 @@ pub fn run(args: Args) -> Result<()> {
                 GameCommand::Spin(GamePlayOptions { count, delay })
                 | GameCommand::Scratch(GamePlayOptions { count, delay })
                 | GameCommand::Math(GamePlayOptions { count, delay }) => {
+                    if !math && !args.json {
+                        println!(
+                            "{:<12}  {:<20}  {:>8}  {:>12}",
+                            "Game", "Reward", "Tokens", "Points"
+                        );
+                        println!("{}", "-".repeat(58));
+                    }
                     for index in 0..count {
                         if index > 0 {
-                            std::thread::sleep(delay);
+                            wait_between_games(delay, !args.json)?;
                         }
                         if math {
                             if !args.json {
@@ -240,7 +247,8 @@ pub fn run(args: Args) -> Result<()> {
                             "new_token_balance"
                         };
                         let message = format!(
-                            "{label} reward: {} | Tokens {} | Points {}",
+                            "{:<12}  {:<20}  {:>8}  {:>12}",
+                            format!("{label} {}", index + 1),
                             text(&response["description"]),
                             formatted_number(&response[tokens]),
                             formatted_number(&response["new_week_points"])
@@ -697,6 +705,30 @@ fn task_failed(response: &Value) -> bool {
 
 fn text(value: &Value) -> &str {
     value.as_str().unwrap_or("")
+}
+
+fn wait_between_games(delay: Duration, show_timer: bool) -> Result<()> {
+    let visible = show_timer && io::stderr().is_terminal();
+    let start = Instant::now();
+    let mut stderr = io::stderr().lock();
+    loop {
+        let remaining = delay.saturating_sub(start.elapsed());
+        if remaining.is_zero() {
+            break;
+        }
+        if visible {
+            write!(stderr, "\rNext game in {:>10.1}s", remaining.as_secs_f64())
+                .and_then(|_| stderr.flush())
+                .map_err(|_| Error::InvalidInput("Could not display game countdown"))?;
+        }
+        std::thread::sleep(remaining.min(Duration::from_millis(100)));
+    }
+    if visible && !delay.is_zero() {
+        write!(stderr, "\r{:58}\r", "")
+            .and_then(|_| stderr.flush())
+            .map_err(|_| Error::InvalidInput("Could not clear game countdown"))?;
+    }
+    Ok(())
 }
 
 fn math_summary(response: &Value) -> (bool, String) {
