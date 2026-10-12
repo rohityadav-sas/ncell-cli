@@ -450,7 +450,7 @@
 
             </a>
 
-            <span class="version">v0.2.0</span>
+            <span class="version">v0.3.0</span>
 
             <div class="header-center">
 
@@ -570,11 +570,15 @@
             <a href="#games-repeat"><svg class="ico" aria-hidden="true">
                     <use href="#i-refresh-cw" />
                 </svg><span>Multiple games and delay</span></a>
+            <p class="nav-title">Automation</p>
+            <a href="#scripts"><svg class="ico" aria-hidden="true">
+                    <use href="#i-terminal" />
+                </svg><span>Scripts</span></a>
             <p class="nav-title">Reference</p>
             <a href="#commands"><svg class="ico" aria-hidden="true">
                     <use href="#i-terminal" />
                 </svg><span>Command reference</span></a>
-            <a href="response-codes.html"><svg class="ico" aria-hidden="true">
+            <a href="#response-codes"><svg class="ico" aria-hidden="true">
                     <use href="#i-info" />
                 </svg><span>Response codes</span></a>
         </nav>
@@ -613,7 +617,7 @@
 
                         <use href="#i-download" />
 
-                    </svg><span>Download v0.2.0</span></a>
+                    </svg><span>Download v0.3.0</span></a>
 
             </div>
 
@@ -904,6 +908,9 @@ brew install ncell-cli</code></pre>
             <p>Use task IDs from <code>ncell game status</code>.</p>
             <pre data-lang="Shell"><code>ncell game claim-task 1,2,3</code></pre>
 
+            <p>Claim every completed task. </p>
+            <pre data-lang="Shell"><code>ncell game claim-task all</code></pre>
+
             <h3 id="games-math">Math</h3>
             <p>Unsupported questions ask you to enter an answer in the terminal.</p>
             <pre data-lang="Shell"><code>ncell game math</code></pre>
@@ -917,7 +924,7 @@ brew install ncell-cli</code></pre>
 
     3  avg(17, 11, 23)                   17  win        165
 
-Math win | Score 165 | Tokens awarded 10</code></pre>
+Math win | Score 165</code></pre>
 
             <h3 id="games-scratch">Scratch card</h3>
             <p>Play a scratch card using your game tokens.</p>
@@ -945,15 +952,15 @@ Spin 1        50 Points                  160         6,695</code></pre>
 
             <h3 id="games-repeat">Play multiple games</h3>
 
-            <h4>Repeat spins</h4>
+            <h4>Multiple spins</h4>
             <p>Play three spins with a 1.5-second delay between games.</p>
             <pre data-lang="Shell"><code>ncell game spin --count 3 --delay 1.5s</code></pre>
 
-            <h4>Repeat scratch cards</h4>
+            <h4>Multiple scratch cards</h4>
             <p>Play three scratch cards with a one-minute delay between games.</p>
             <pre data-lang="Shell"><code>ncell game scratch --count 3 --delay 1m</code></pre>
 
-            <h4>Repeat math games</h4>
+            <h4>Multiple math games</h4>
             <p>Play two math games with a 1.5-hour delay between games.</p>
             <pre data-lang="Shell"><code>ncell game math --count 2 --delay 1.5h</code></pre>
 
@@ -972,6 +979,67 @@ Spin 1        50 Points                  160         6,695</code></pre>
                 </li>
 
             </ul>
+
+            <h4 id="scripts-games">Use remaining tokens</h4>
+            <p>Use <code>--count all</code> to use all tokens to play the game until you run
+                out of tokens.
+            </p>
+            <pre data-lang="Shell"><code>ncell game spin --count all --delay 1.5s</code></pre>
+
+            <h2 id="scripts">Scripts</h2>
+            <p>Create a reusable script for running multiple commands at once.</p>
+            <h3 id="scripts-create">Create a script</h3>
+            <p>Use a name ending in .ncell.
+            </p>
+            <pre data-lang="Shell"><code>ncell script create daily.ncell</code></pre>
+            <h3 id="scripts-list">List scripts</h3>
+            <p>List scripts saved in the CLI, sorted by name.</p>
+            <pre data-lang="Shell"><code>ncell script list</code></pre>
+            <h3 id="scripts-edit">Edit a script</h3>
+            <p>Opens a saved script in your default text editor.</p>
+            <pre data-lang="Shell"><code>ncell script edit daily.ncell</code></pre>
+            <h3 id="scripts-delete">Delete a script</h3>
+            <p>Delete a script using its name. This does not affect files in the current folder.</p>
+            <pre data-lang="Shell"><code>ncell script delete daily.ncell</code></pre>
+            <h3 id="scripts-run">Run a script</h3>
+            <p>Edit and save the file, then run it by name. The CLI checks saved scripts first, then the current folder.
+            <pre data-lang="Shell"><code>ncell script run daily.ncell</code></pre>
+            <h3 id="scripts-format">File format</h3>
+            <p>Write command per line. The <code>ncell</code> prefix is optional. Blank lines and
+                lines starting with <code>#</code> are ignored. Use single or double quotes around arguments containing
+                spaces.</p>
+            <pre data-lang="Text"><code>sms send-free 98XXXXXXXX "Hello from my script"</code></pre>
+            <h3 id="scripts-example">Script example</h3>
+            <pre data-lang="Text"><code># Daily rewards
+ncell game check-in
+ncell game claim-task 1,2,3,4,5,6,7,8
+
+# Spinner reward
+ncell game spin --count 5
+ncell game claim-task 22
+
+# Scratch card reward
+ncell game scratch --count 4
+ncell game claim-task 23
+
+# Math reward
+ncell game math --count 1
+ncell game claim-task 26
+
+# Game Warrior reward
+ncell game claim-task 18
+
+# Math Genius reward
+ncell game math --count 4
+ncell game claim-task 24
+
+# Spend remaining tokens
+ncell game spin --count all
+
+# Final checks
+ncell game status
+ncell game ranks
+</code></pre>
 
             <h2 id="commands">Command reference</h2>
 
@@ -1275,7 +1343,7 @@ Spin 1        50 Points                  160         6,695</code></pre>
 
                                     <td><code>game claim-task</code></td>
 
-                                    <td><code>&lt;ids&gt;</code> - comma-separated or space-separated task IDs</td>
+                                    <td><code>&lt;ids|all&gt;</code> - comma-separated or space-separated task IDs</td>
 
                                 </tr>
 
@@ -1299,7 +1367,7 @@ Spin 1        50 Points                  160         6,695</code></pre>
 
                                     <td><code>game spin</code></td>
 
-                                    <td><code>[--count &lt;number&gt;] [--delay &lt;duration&gt;]</code></td>
+                                    <td><code>[--count &lt;number|all&gt;] [--delay &lt;duration&gt;]</code></td>
 
                                 </tr>
 
@@ -1307,7 +1375,7 @@ Spin 1        50 Points                  160         6,695</code></pre>
 
                                     <td><code>game scratch</code></td>
 
-                                    <td><code>[--count &lt;number&gt;] [--delay &lt;duration&gt;]</code></td>
+                                    <td><code>[--count &lt;number|all&gt;] [--delay &lt;duration&gt;]</code></td>
 
                                 </tr>
 
@@ -1315,7 +1383,7 @@ Spin 1        50 Points                  160         6,695</code></pre>
 
                                     <td><code>game math</code></td>
 
-                                    <td><code>[--count &lt;number&gt;] [--delay &lt;duration&gt;]</code></td>
+                                    <td><code>[--count &lt;number|all&gt;] [--delay &lt;duration&gt;]</code></td>
 
                                 </tr>
 
@@ -1327,6 +1395,43 @@ Spin 1        50 Points                  160         6,695</code></pre>
 
                 </section>
 
+                <section class="code-section" aria-labelledby="commands-scripts">
+                    <div class="code-heading">
+                        <h3 id="commands-scripts">Scripts</h3>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Command</th>
+                                    <th>Arguments / options</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>script create</code></td>
+                                    <td><code>&lt;file&gt;</code> — create an editable example</td>
+                                </tr>
+                                <tr>
+                                    <td><code>script list</code></td>
+                                    <td>List scripts saved in the CLI</td>
+                                </tr>
+                                <tr>
+                                    <td><code>script edit</code></td>
+                                    <td><code>&lt;file-name&gt;</code> — open a saved script in your editor</td>
+                                </tr>
+                                <tr>
+                                    <td><code>script delete</code></td>
+                                    <td><code>&lt;file-name&gt;</code> — delete a saved script</td>
+                                </tr>
+                                <tr>
+                                    <td><code>script run</code></td>
+                                    <td><code>&lt;file&gt;</code> — validate and run commands in order</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
                 <section class="code-section" aria-labelledby="commands-help">
 
                     <div class="code-heading">
@@ -1399,11 +1504,13 @@ Spin 1        50 Points                  160         6,695</code></pre>
 
             </div>
 
+        </article>
+
             <footer class="page-footer">
 
                 <p>
 
-                    ncell-cli v0.2.0 <span class="footer-dot">·</span> MIT
+                    ncell-cli v0.3.0 <span class="footer-dot">·</span> MIT
 
                     licensed
 

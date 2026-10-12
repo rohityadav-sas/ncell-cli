@@ -83,6 +83,10 @@ fn submit(
 }
 
 pub(super) fn csrf(web: &Client, url: &str) -> Result<String> {
+    Ok(bootstrap(web, url)?.0)
+}
+
+fn bootstrap(web: &Client, url: &str) -> Result<(String, Option<u64>)> {
     let page = web
         .get(url)
         .header("User-Agent", WEB_UA)
@@ -98,7 +102,7 @@ pub(super) fn csrf(web: &Client, url: &str) -> Result<String> {
     let html = page.text().map_err(Error::from_http)?;
     let document = Html::parse_document(&html);
     let selector = Selector::parse("input[name=csrf_token]").unwrap();
-    document
+    let csrf = document
         .select(&selector)
         .next()
         .and_then(|input| input.value().attr("value"))
@@ -106,18 +110,32 @@ pub(super) fn csrf(web: &Client, url: &str) -> Result<String> {
         .ok_or(Error::InvalidInput(
             "Check-in page did not provide a CSRF token",
         ))
-        .map(str::to_owned)
+        .map(str::to_owned)?;
+    Ok((csrf, token_balance(&document)))
+}
+
+fn token_balance(document: &Html) -> Option<u64> {
+    document
+        .select(&Selector::parse("#tokens-display").unwrap())
+        .next()?
+        .text()
+        .collect::<String>()
+        .trim()
+        .replace(',', "")
+        .parse()
+        .ok()
 }
 
 pub struct GameSession {
     pub(super) web: Client,
     pub(super) csrf: String,
+    pub tokens: Option<u64>,
 }
 impl GameSession {
     pub fn new(url: &str) -> Result<Self> {
         let web = web_client()?;
-        let csrf = csrf(&web, url)?;
-        Ok(Self { web, csrf })
+        let (csrf, tokens) = bootstrap(&web, url)?;
+        Ok(Self { web, csrf, tokens })
     }
     pub fn spin(&self) -> Result<Value> {
         self.spin_at("https://sajeeb.com.np/ncellapp/checkin/fetchSpinReward.php")
@@ -196,6 +214,15 @@ fn decode(response: reqwest::blocking::Response, reward: bool) -> Result<Value> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_bootstrap_balance_including_zero_and_grouped_numbers() {
+        for (text, expected) in [("0", 0), ("85", 85), ("1,250", 1250)] {
+            let document = Html::parse_document(&format!("<div id='tokens-display'>{text}</div>"));
+            assert_eq!(token_balance(&document), Some(expected));
+        }
+        assert_eq!(token_balance(&Html::parse_document("")), None);
+    }
 
     #[test]
     fn spin_uses_only_csrf_and_cookie_and_preserves_success_and_errors_without_retry() {

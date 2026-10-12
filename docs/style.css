@@ -364,3 +364,32 @@ h2 { padding-top: 30px; border-top: 1px solid var(--border); }
 
 /* Action headings within documentation topics. */
 h4 { margin: 28px 0 8px; color: var(--text); font-size: 16px; font-weight: 650; line-height: 1.4; }
+
+/* ---------- Syntax highlighting ---------- */
+:root {
+  --syntax-command: #702da0;
+  --syntax-option: #1859a8;
+  --syntax-string: #147347;
+  --syntax-number: #9a4700;
+  --syntax-comment: #6b6677;
+}
+:root[data-theme="dark"] {
+  --syntax-command: #d5a6ff;
+  --syntax-option: #8abaff;
+  --syntax-string: #86d6a5;
+  --syntax-number: #ffc080;
+  --syntax-comment: #aaa3b8;
+}
+.syntax-command, .syntax-keyword { color: var(--syntax-command); }
+.syntax-option, .syntax-key { color: var(--syntax-option); }
+.syntax-string { color: var(--syntax-string); }
+.syntax-number { color: var(--syntax-number); }
+.syntax-comment { color: var(--syntax-comment); font-style: italic; }
+.syntax-parameter { color: var(--syntax-option); }
+
+/* ---------- Response codes ---------- */
+#codes-view > h2:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+#code-rows th:first-child { width: 130px; }
+#code-rows td:first-child { white-space: nowrap; }
+#code-rows tr[data-prefix] { scroll-margin-top: calc(var(--header-h) + 24px); }
+#code-rows tr:target td { background: var(--accent-tint); }

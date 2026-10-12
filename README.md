@@ -8,7 +8,7 @@
 
 <img alt="Written in Rust" src="https://img.shields.io/badge/Written_in-Rust-702DA0?style=for-the-badge&logo=rust&logoColor=white">
 
-<img alt="ncell-cli v0.2.0" src="https://img.shields.io/badge/ncell--cli-v0.2.0-702DA0?style=for-the-badge&logo=rust&logoColor=white">
+<img alt="ncell-cli v0.3.0" src="https://img.shields.io/badge/ncell--cli-v0.3.0-702DA0?style=for-the-badge&logo=rust&logoColor=white">
 
 <img alt="MIT licensed" src="https://img.shields.io/badge/license-MIT-1F9D55?style=for-the-badge">
 
@@ -153,3 +153,18 @@ chmod +x ncell
 Linux credential storage requires an unlocked Secret Service provider, such as GNOME Keyring or KWallet with Secret Service enabled.
 
 3. (Optional) Add the directory containing the executable to your `PATH` to run `ncell` from anywhere.
+
+## Scripts
+
+Save commands in a reusable script. Creating a script opens it in your text editor.
+
+```sh
+ncell script create daily.ncell
+ncell script run daily.ncell
+```
+
+Use `script list`, `script edit daily.ncell` and `script delete daily.ncell` to manage saved scripts. Scripts are checked before running and stop on the first failure.
+
+Use `game claim-task all` to claim completed, unclaimed tasks. Use `--count all` with spin, scratch or math to spend the available game tokens.
+
+See the [Scripts guide](https://rohityadav-sas.github.io/ncell-cli/#scripts) for file format and examples.

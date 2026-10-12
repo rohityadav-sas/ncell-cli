@@ -107,13 +107,6 @@
     }
   }
   indexPage(document, '');
-  const otherPage = article.querySelector('#code-rows') ? 'index.html' : 'response-codes.html';
-  let searchUnavailable = false;
-  const searchReady = fetch(otherPage)
-    .then(response => { if (!response.ok) throw new Error('Search page unavailable'); return response.text(); })
-    .then(html => indexPage(new DOMParser().parseFromString(html, 'text/html'), otherPage))
-    .catch(() => { searchUnavailable = true; });
-
   /* ---------- Heading anchors ---------- */
   for (const heading of article.querySelectorAll('h2[id], h3[id]')) {
     const anchor = document.createElement('a');
@@ -122,6 +115,42 @@
     anchor.setAttribute('aria-label', `Link to “${heading.textContent}”`);
     heading.append(anchor);
   }
+
+  /* ---------- Syntax colors (text nodes preserve copy and search text) ---------- */
+  const commandWords = new Set(('ncell winget scoop brew install bucket tap add login logout status balance profile account list switch remove plans categories search subscribe sms send-free game check-in claim-task math scratch spin ranks script create edit delete run help').split(' '));
+  function highlightCode(code, language) {
+    const source = code.textContent;
+    const output = language === 'Output';
+    const json = language === 'JSON';
+    const fragment = document.createDocumentFragment();
+    const tokens = /#[^\r\n]*|"(?:\\.|[^"\\])*"|'[^']*'|https?:\/\/[^\s]+|--?[a-zA-Z][\w-]*|<[^>\r\n]+>|\b[\w-]+(?:\.[\w-]+)+\b|\b\d+(?:[.,]\d+)*(?:s|m|h)?\b|\b[a-zA-Z][\w-]*\b/g;
+    let offset = 0;
+    for (const match of source.matchAll(tokens)) {
+      const value = match[0];
+      let kind = '';
+      if (!output && !json && value.startsWith('#')) kind = 'comment';
+      else if (/^["']/.test(value)) kind = json && /^\s*:/.test(source.slice(match.index + value.length)) ? 'key' : 'string';
+      else if (/^https?:/.test(value)) kind = 'string';
+      else if (!output && /^--?/.test(value)) kind = 'option';
+      else if (!output && value.startsWith('<')) kind = 'parameter';
+      else if (/^\d/.test(value)) kind = 'number';
+      else if (!output && commandWords.has(value)) kind = 'command';
+      else if (['true', 'false', 'null'].includes(value)) kind = 'keyword';
+      fragment.append(document.createTextNode(source.slice(offset, match.index)));
+      if (kind) {
+        const span = document.createElement('span');
+        span.className = 'syntax-' + kind;
+        span.textContent = value;
+        fragment.append(span);
+      } else fragment.append(document.createTextNode(value));
+      offset = match.index + value.length;
+    }
+    fragment.append(document.createTextNode(source.slice(offset)));
+    code.replaceChildren(fragment);
+  }
+  article.querySelectorAll('code').forEach(code => {
+    highlightCode(code, code.closest('pre')?.dataset.lang || 'Shell');
+  });
 
   /* ---------- Code blocks ---------- */
   const langIcons = { Shell: 'terminal', PowerShell: 'terminal', JSON: 'braces', Output: 'file-text', Text: 'file-text' };
@@ -182,31 +211,170 @@
     .map(link => ({ link, heading: document.getElementById(link.hash.slice(1)) }))
     .filter(target => target.heading)
     .sort((a, b) => a.heading.compareDocumentPosition(b.heading) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  let followedLink = null;
+  function followActiveLink(link) {
+    if (!link || link === followedLink || !sidebar.getClientRects().length) return;
+    followedLink = link;
+    sidebar.scrollTo({ top: sidebar.scrollTop, behavior: 'instant' });
+    const bounds = sidebar.getBoundingClientRect();
+    const item = link.getBoundingClientRect();
+    const padding = 20;
+    let delta = 0;
+    if (item.top < bounds.top + padding) delta = item.top - bounds.top - padding;
+    else if (item.bottom > bounds.bottom - padding) delta = item.bottom - bounds.bottom + padding;
+    if (delta) sidebar.scrollTo({
+      top: sidebar.scrollTop + delta,
+      behavior: reducedMotion.matches ? 'instant' : 'smooth'
+    });
+  }
+  let codesMode = false;
   let ticking = false;
+  let routing = false;
+  let navigationTarget = null;
+  let scrollIdle;
+  function releaseNavigationTarget() {
+    navigationTarget = null;
+    clearTimeout(scrollIdle);
+    updateActive();
+  }
   function updateActive() {
     ticking = false;
-    const threshold = $('.header').getBoundingClientRect().bottom + 25;
+    if (routing) return;
+    if (codesMode) {
+      for (const link of navLinks) {
+        const on = link.hash === '#response-codes';
+        link.classList.toggle('active', on);
+        if (on) link.setAttribute('aria-current', 'location');
+        else link.removeAttribute('aria-current');
+      }
+      followActiveLink(navLinks.find(link => link.hash === '#response-codes'));
+      return;
+    }
+    const threshold = $('.header').getBoundingClientRect().bottom + 29;
     let current = spyTargets[0];
     for (const target of spyTargets) {
       if (target.heading.getBoundingClientRect().top <= threshold) current = target;
       else break;
     }
     if (innerHeight + scrollY >= root.scrollHeight - 2) current = spyTargets[spyTargets.length - 1];
-    for (const target of spyTargets) {
+    if (navigationTarget) current = navigationTarget;
+    for (const link of navLinks) {
+      const target = spyTargets.find(target => target.link === link);
       const on = target === current;
-      target.link.classList.toggle('active', on);
-      if (on) target.link.setAttribute('aria-current', 'location');
-      else target.link.removeAttribute('aria-current');
+      link.classList.toggle('active', on);
+      if (on) link.setAttribute('aria-current', 'location');
+      else link.removeAttribute('aria-current');
     }
+    followActiveLink(current?.link);
   }
   addEventListener('scroll', () => {
+    if (navigationTarget) {
+      clearTimeout(scrollIdle);
+      scrollIdle = setTimeout(releaseNavigationTarget, 150);
+    }
     if (!ticking) { ticking = true; requestAnimationFrame(updateActive); }
   }, { passive: true });
+  addEventListener('scrollend', releaseNavigationTarget);
+  for (const type of ['wheel', 'touchstart']) {
+    addEventListener(type, event => {
+      if (!(event.target instanceof Node) || !sidebar.contains(event.target)) releaseNavigationTarget();
+    }, { passive: true });
+  }
+  addEventListener('keydown', event => {
+    if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)
+        && !event.target.closest('input, textarea, select, dialog')) releaseNavigationTarget();
+  });
   addEventListener('resize', updateActive);
-  addEventListener('hashchange', updateActive);
   addEventListener('pageshow', updateActive);
   addEventListener('load', updateActive);
   updateActive();
+
+  /* ---------- Response codes view, loaded only for navigation or search ---------- */
+  const codesView = document.createElement('article');
+  codesView.id = 'codes-view';
+  codesView.hidden = true;
+  article.after(codesView);
+  let codesReady;
+  function loadCodes() {
+    if (!codesReady) codesReady = fetch('response-codes-content.html')
+      .then(response => {
+        if (!response.ok) throw new Error('Response codes could not be loaded.');
+        return response.text();
+      })
+      .then(html => {
+        const doc = new DOMParser().parseFromString('<article id="content">' + html + '</article>', 'text/html');
+        indexPage(doc, '');
+        codesView.replaceChildren(...doc.querySelector('#content').childNodes);
+        codesView.querySelectorAll('code').forEach(code => highlightCode(code, 'Text'));
+        codesView.querySelectorAll('.table-wrap').forEach(wrap => { wrap.tabIndex = 0; });
+        for (const heading of codesView.querySelectorAll('h2[id], h3[id]')) {
+          const anchor = document.createElement('a');
+          anchor.className = 'anchor';
+          anchor.href = '#' + heading.id;
+          anchor.setAttribute('aria-label', `Link to “${heading.textContent}”`);
+          heading.append(anchor);
+        }
+      })
+      .catch(error => { codesReady = null; throw error; });
+    return codesReady;
+  }
+  let routeVersion = 0;
+  let routeStarted = false;
+  let viewAnimation;
+  async function route() {
+    const version = ++routeVersion;
+    const id = location.hash.slice(1);
+    routing = true;
+    const nextCodesMode = id === 'response-codes' || id.startsWith('codes-') || /^[A-Z]+[0-9]+$/.test(id);
+    const switchingView = routeStarted && nextCodesMode !== codesMode;
+    const smoothScroll = routeStarted && !switchingView && !reducedMotion.matches;
+    routeStarted = true;
+    viewAnimation?.cancel();
+    codesMode = nextCodesMode;
+    article.hidden = codesMode;
+    codesView.hidden = !codesMode;
+    if (codesMode) {
+      if (!codesReady) codesView.textContent = 'Loading response codes…';
+      try { await loadCodes(); }
+      catch (error) {
+        if (version === routeVersion) {
+          codesView.textContent = error.message + ' Select Response codes to try again.';
+          routing = false;
+          updateActive();
+        }
+        return;
+      }
+    }
+    if (version !== routeVersion) return;
+    document.title = codesMode ? 'Response codes · ncell-cli' : 'ncell-cli documentation';
+    // Scroll within a view; fade between views after positioning the destination.
+    const destination = document.getElementById(id);
+    navigationTarget = codesMode || !destination ? null : spyTargets.findLast(target =>
+      target.heading === destination || (target.heading.compareDocumentPosition(destination) & Node.DOCUMENT_POSITION_FOLLOWING));
+    clearTimeout(scrollIdle);
+    const behavior = smoothScroll ? 'smooth' : 'instant';
+    if (destination) destination.scrollIntoView({ behavior });
+    else window.scrollTo({ top: 0, behavior });
+    routing = false;
+    updateActive();
+    if (switchingView && !reducedMotion.matches) {
+      viewAnimation = (codesMode ? codesView : article).animate(
+        [{ opacity: 0 }, { opacity: 1 }],
+        { duration: 180, easing: 'ease-out' }
+      );
+    }
+  }
+  addEventListener('hashchange', route);
+  document.addEventListener('click', event => {
+    const link = event.target.closest('a[href]');
+    if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const url = new URL(link.href, location.href);
+    if (url.origin !== location.origin || url.pathname !== location.pathname || url.search !== location.search || !url.hash) return;
+    event.preventDefault();
+    if (url.hash !== location.hash) history.pushState(null, '', url.hash);
+    route();
+  });
 
   /* ---------- Search dialog ---------- */
   const dialog = $('#search-dialog');
@@ -281,7 +449,7 @@
     setActive(-1);
     if (!query) {
       status.className = 'search-hint';
-      status.textContent = searchUnavailable ? 'Other page unavailable; searching this page only.' : 'Search documentation and response codes.';
+      status.textContent = 'Search documentation and response codes.';
       return;
     }
     results = runSearch(query);
@@ -339,8 +507,8 @@
     input.value = '';
     render();
     input.focus();
-    await searchReady;
-    if (dialog.open) render();
+    try { await loadCodes(); if (dialog.open) render(); }
+    catch { status.textContent = 'Response codes unavailable; searching the main documentation.'; }
   }
 
   $('#search-btn').addEventListener('click', openSearch);
@@ -375,4 +543,5 @@
       menuBtn.focus();
     }
   });
+  route();
 })();

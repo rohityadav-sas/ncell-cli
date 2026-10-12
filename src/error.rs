@@ -3,6 +3,8 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("{0}")]
+    Script(String),
+    #[error("{0}")]
     InvalidInput(&'static str),
     #[error("Network request failed; check your connection and try again")]
     Network,

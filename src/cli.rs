@@ -1,3 +1,4 @@
+mod script;
 use clap::builder::styling::{AnsiColor, Style};
 use clap::{Parser, Subcommand};
 use ncell_cli::{
@@ -35,6 +36,11 @@ pub struct Args {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Create, manage and run saved command scripts.
+    Script {
+        #[command(subcommand)]
+        action: script::ScriptCommand,
+    },
     /// Request an SMS code and log in. Use --verify to resume a pending login.
     Login {
         number: String,
@@ -139,21 +145,73 @@ enum GameCommand {
     Status,
     /// Claim the daily check-in reward.
     CheckIn,
-    /// Claim completed tasks in order; accepts comma-separated IDs.
+    /// Claim tasks by ID, or all completed unclaimed tasks.
     ClaimTask {
-        #[arg(required = true, value_delimiter = ',', num_args = 1.., value_parser = clap::value_parser!(u64).range(1..))]
-        ids: Vec<u64>,
+        #[arg(required = true, value_delimiter = ',', num_args = 1.., value_parser = parse_task_id)]
+        ids: Vec<String>,
     },
 }
 
 #[derive(clap::Args)]
 struct GamePlayOptions {
-    /// Number of games to play.
-    #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..))]
-    count: u32,
+    /// Number of games to play, or all until tokens are insufficient.
+    #[arg(long, default_value = "1", value_parser = parse_count)]
+    count: String,
     /// Wait between games: seconds by default, or use s, m, h (e.g. 1.5s).
     #[arg(long, default_value = "0", value_parser = parse_delay)]
     delay: Duration,
+}
+
+fn parse_count(value: &str) -> std::result::Result<String, String> {
+    if value == "all" || value.parse::<u32>().is_ok_and(|n| n > 0) {
+        Ok(value.into())
+    } else {
+        Err("Count must be a positive integer or all".into())
+    }
+}
+fn parse_task_id(value: &str) -> std::result::Result<String, String> {
+    if value == "all" || value.parse::<u64>().is_ok_and(|n| n > 0) {
+        Ok(value.into())
+    } else {
+        Err("Task ID must be a positive integer or all".into())
+    }
+}
+fn validate_args(args: &Args) -> std::result::Result<(), String> {
+    if let Command::Game {
+        action: GameCommand::ClaimTask { ids },
+    } = &args.command
+        && ids.iter().any(|id| id == "all")
+        && ids.len() != 1
+    {
+        return Err("Use all alone, without task IDs".into());
+    }
+    Ok(())
+}
+fn affordable_total(played: u64, tokens: u64, cost: u64) -> u64 {
+    played.saturating_add(tokens / cost)
+}
+
+fn insufficient_tokens(error: &Error) -> bool {
+    matches!(error, Error::CheckIn { status: 200, message, .. }
+        if ["Insufficient tokens", "Not enough points"].iter().any(|known| message.trim().eq_ignore_ascii_case(known)))
+}
+fn claimable_ids(response: &Value) -> Result<Vec<u64>> {
+    response["challenges"]
+        .as_array()
+        .ok_or(Error::InvalidResponse)?
+        .iter()
+        .filter(|task| {
+            (task["completed"] == true || task["completed"] == 1)
+                && (task["rewarded"] == false || task["rewarded"] == 0)
+        })
+        .map(|task| {
+            task["id"]
+                .as_u64()
+                .or_else(|| task["id"].as_str()?.parse().ok())
+                .filter(|id| *id > 0)
+                .ok_or(Error::InvalidResponse)
+        })
+        .collect()
 }
 
 #[derive(Clone, Copy)]
@@ -192,7 +250,9 @@ fn parse_delay(value: &str) -> std::result::Result<Duration, String> {
 }
 
 pub fn run(args: Args) -> Result<()> {
+    validate_args(&args).map_err(Error::Script)?;
     match args.command {
+        Command::Script { action } => return script::run(action, args.json),
         Command::Game { action } => {
             let url = authenticated(|client, account, _| {
                 client.check_in_url(&account.msisdn, &account.access_token)
@@ -203,30 +263,71 @@ pub fn run(args: Args) -> Result<()> {
                 GameCommand::Spin(GamePlayOptions { count, delay })
                 | GameCommand::Scratch(GamePlayOptions { count, delay })
                 | GameCommand::Math(GamePlayOptions { count, delay }) => {
-                    if !math && !args.json {
-                        println!(
-                            "{:<12}  {:<20}  {:>8}  {:>12}",
-                            "Game", "Reward", "Tokens", "Points"
-                        );
-                        println!("{}", "-".repeat(58));
-                    }
                     let game = ncell_cli::api::GameSession::new(&url)?;
-                    for index in 0..count {
+                    let all = count == "all";
+                    let count = if all {
+                        0
+                    } else {
+                        count.parse::<u64>().unwrap()
+                    };
+                    // All three supported games currently charge 25 tokens per entry.
+                    let cost = 25;
+                    let mut balance = game.tokens;
+                    for index in 0u64.. {
+                        if !all && index >= count {
+                            break;
+                        }
+                        let total = if all {
+                            let remaining = balance.ok_or(Error::InvalidInput(
+                                "Game page did not provide the token balance",
+                            ))?;
+                            let total = affordable_total(index, remaining, cost);
+                            if total == index {
+                                output(
+                                    args.json,
+                                    json!({"stop":"insufficient_tokens","games":index}),
+                                    "No tokens left for another game.",
+                                );
+                                return Ok(());
+                            }
+                            total
+                        } else {
+                            count
+                        };
                         if index > 0 {
                             wait_between_games(delay, !args.json)?;
                         }
-                        if math {
-                            if !args.json {
+                        let repeated = all || count > 1;
+                        if repeated {
+                            if args.json {
+                                script::emit_json(json!({"event":"game_start", "game":index + 1,
+                                    "total":total}));
+                            } else {
                                 if index > 0 {
                                     println!();
                                 }
+                                let progress = AnsiColor::Cyan.on_default().bold();
+                                let label = format!("Game {} of {total}", index + 1);
+                                anstream::println!("{progress}{label}{progress:#}\n");
+                                io::stdout().flush().map_err(|_| Error::InvalidResponse)?;
+                            }
+                        }
+                        if !math && !args.json {
+                            println!(
+                                "{:<12}  {:<20}  {:>8}  {:>12}",
+                                "Game", "Reward", "Tokens", "Points"
+                            );
+                            println!("{}", "-".repeat(58));
+                        }
+                        if math {
+                            if !args.json {
                                 println!(
                                     "{:>5}  {:<28}  {:>6}  {:<7}  {:>5}",
                                     "Level", "Question", "Answer", "Result", "Score"
                                 );
                                 println!("{}", "-".repeat(59));
                             }
-                            let response = game.math(
+                            let result = game.math(
                                 |item| {
                                     let message = format!(
                                         "{:>5}  {:<28}  {:>6}  {:<7}  {:>5}",
@@ -250,7 +351,20 @@ pub fn run(args: Args) -> Result<()> {
                                         &mut io::stderr().lock(),
                                     )
                                 },
-                            )?;
+                            );
+                            let response = match result {
+                                Err(error) if all && insufficient_tokens(&error) => {
+                                    output(
+                                        args.json,
+                                        json!({"stop":"insufficient_tokens","games":index}),
+                                        "No tokens left for another game.",
+                                    );
+                                    return Ok(());
+                                }
+                                result => result?,
+                            };
+                            // bg_reward is not a token refund; only deduct the entry fee.
+                            balance = balance.map(|tokens| tokens.saturating_sub(cost));
                             let (won, message) = math_summary(&response);
                             output(args.json, response, message);
                             io::stdout().flush().map_err(|_| Error::InvalidResponse)?;
@@ -259,10 +373,17 @@ pub fn run(args: Args) -> Result<()> {
                             }
                             continue;
                         }
-                        let response = if scratch {
-                            game.scratch()?
-                        } else {
-                            game.spin()?
+                        let response = if scratch { game.scratch() } else { game.spin() };
+                        let response = match response {
+                            Err(error) if all && insufficient_tokens(&error) => {
+                                output(
+                                    args.json,
+                                    json!({"stop":"insufficient_tokens","games":index}),
+                                    "No tokens left for another game.",
+                                );
+                                return Ok(());
+                            }
+                            result => result?,
                         };
                         let label = if scratch { "Scratch" } else { "Spin" };
                         let tokens = if scratch {
@@ -270,6 +391,7 @@ pub fn run(args: Args) -> Result<()> {
                         } else {
                             "new_token_balance"
                         };
+                        balance = response[tokens].as_u64();
                         let message = format!(
                             "{:<12}  {:<20}  {:>8}  {:>12}",
                             format!("{label} {}", index + 1),
@@ -285,7 +407,7 @@ pub fn run(args: Args) -> Result<()> {
                 GameCommand::Ranks => {
                     let response = ncell_cli::api::game_ranks(&url)?;
                     if args.json {
-                        println!("{response:#}");
+                        script::emit_json(response.clone());
                     } else {
                         print_ranks(&response);
                     }
@@ -294,14 +416,29 @@ pub fn run(args: Args) -> Result<()> {
                 GameCommand::Status => {
                     let response = ncell_cli::api::game_tasks(&url)?;
                     if args.json {
-                        println!("{response:#}");
+                        script::emit_json(response.clone());
                     } else {
                         print_tasks(&response)?;
                     }
                     return Ok(());
                 }
                 GameCommand::CheckIn => Vec::new(),
-                GameCommand::ClaimTask { ids } => ids,
+                GameCommand::ClaimTask { ids } => {
+                    if ids == ["all"] {
+                        let ids = claimable_ids(&ncell_cli::api::game_tasks(&url)?)?;
+                        if ids.is_empty() {
+                            output(
+                                args.json,
+                                json!({"claimed":[]}),
+                                "No tasks available to claim.",
+                            );
+                            return Ok(());
+                        }
+                        ids
+                    } else {
+                        ids.iter().map(|id| id.parse().unwrap()).collect()
+                    }
+                }
             };
             let response = ncell_cli::api::check_in(&url, &id, |item| {
                 if !args.json {
@@ -334,7 +471,7 @@ pub fn run(args: Args) -> Result<()> {
                     });
                 }
                 if args.json {
-                    println!("{response:#}");
+                    script::emit_json(response.clone());
                 }
             }
         }
@@ -372,7 +509,7 @@ pub fn run(args: Args) -> Result<()> {
                 ))
             })?;
             if args.json {
-                println!("{response:#}");
+                script::emit_json(response.clone());
             } else {
                 println!("Subscribed to {name}.");
             }
@@ -547,7 +684,7 @@ pub fn run(args: Args) -> Result<()> {
                 });
             }
             if args.json {
-                println!("{data:#}");
+                script::emit_json(data.clone());
             } else if list_categories {
                 println!("{:<6}  {:<22}  Type", "ID", "Category");
                 println!("{}", "-".repeat(58));
@@ -845,7 +982,7 @@ fn print_ranks(response: &Value) {
     let heading = Style::new().bold();
     let title = AnsiColor::Cyan.on_default().bold();
     let dim = Style::new().dimmed();
-    anstream::println!("\n{title}{}{title:#}", text(&response["week"]));
+    anstream::println!("{title}{}{title:#}", text(&response["week"]));
     let current = &response["performance"];
     if !current.is_null() {
         anstream::println!(
@@ -972,7 +1109,7 @@ fn print_task(item: &Value) {
     let data = &item["response"];
     if data["success"] == true {
         println!(
-            "Task {} claimed. Tokens awarded: {}. Game tokens: {}. Weekly points: {}.",
+            "Task {} claimed. Reward awarded: {}. Game tokens: {}. Weekly points: {}.",
             item["id"], data["points_awarded"], data["new_token_balance"], data["new_week_points"]
         );
     } else {
@@ -1031,18 +1168,12 @@ fn math_summary(response: &Value) -> (bool, String) {
         .get("total_score")
         .filter(|value| !value.is_null())
         .unwrap_or(&response["score"]);
-    let reward = response
-        .get("bg_reward")
-        .filter(|value| !value.is_null())
-        .cloned()
-        .unwrap_or(json!(0));
     (
         won,
         format!(
-            "Math {} | Score {} | Tokens awarded {}",
+            "Math {} | Score {}",
             if won { "win" } else { "game_over" },
-            formatted_number(score),
-            formatted_number(&reward)
+            formatted_number(score)
         ),
     )
 }
@@ -1089,7 +1220,7 @@ fn manual_math_answer(
 
 fn output(json: bool, data: Value, message: impl std::fmt::Display) {
     if json {
-        println!("{data:#}");
+        script::emit_json(data.clone());
     } else {
         println!("{message}");
     }
@@ -1132,6 +1263,16 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn all_game_progress_uses_affordable_entries_without_cap() {
+        assert_eq!(affordable_total(0, 85, 25), 3);
+        assert_eq!(affordable_total(1, 60, 25), 3);
+        assert_eq!(affordable_total(3, 10, 25), 3);
+        assert_eq!(affordable_total(0, 0, 25), 0);
+        assert_eq!(affordable_total(0, 5000, 25), 200);
+        assert_eq!(affordable_total(1, 85, 25), 4);
+    }
+
+    #[test]
     fn completed_tasks_are_normal_results_but_other_failures_are_errors() {
         assert!(!task_failed(&json!({"success": true})));
         assert!(!task_failed(
@@ -1147,7 +1288,7 @@ mod tests {
     fn game_arguments_require_one_action_and_task_ids() {
         let args = Args::try_parse_from(["ncell", "game", "claim-task", "1,2,3"]).unwrap();
         assert!(
-            matches!(args.command, Command::Game { action: GameCommand::ClaimTask { ids } } if ids == [1, 2, 3])
+            matches!(args.command, Command::Game { action: GameCommand::ClaimTask { ids } } if ids == ["1", "2", "3"])
         );
         assert!(Args::try_parse_from(["ncell", "game", "check-in"]).is_ok());
         for flags in [
@@ -1224,11 +1365,11 @@ mod tests {
         ] {
             let (won, message) = math_summary(&response);
             assert!(!won);
-            assert_eq!(message, "Math game_over | Score 0 | Tokens awarded 0");
+            assert_eq!(message, "Math game_over | Score 0");
         }
         assert_eq!(
             math_summary(&json!({"result":"win","total_score":165,"score":145,"bg_reward":10})),
-            (true, "Math win | Score 165 | Tokens awarded 10".into())
+            (true, "Math win | Score 165".into())
         );
         assert!(math_summary(&json!({"win":true,"score":165,"bg_reward":10})).0);
     }
@@ -1275,6 +1416,43 @@ mod tests {
         for count in ["0", "-1", "1.5"] {
             assert!(Args::try_parse_from(["ncell", "game", "spin", "--count", count]).is_err());
         }
+    }
+
+    #[test]
+    fn all_game_and_task_helpers_are_strict() {
+        for game in ["spin", "scratch", "math"] {
+            assert!(
+                Args::try_parse_from(["ncell", "game", game, "--count", "all", "--delay", "1.5s"])
+                    .is_ok()
+            );
+            assert!(
+                Args::try_parse_from(["ncell", "game", game, "--count", "all", "--max-games", "2"])
+                    .is_err()
+            );
+        }
+        assert!(
+            validate_args(&Args::try_parse_from(["ncell", "game", "claim-task", "all,1"]).unwrap())
+                .is_err()
+        );
+        let response = json!({"challenges":[
+            {"id":22,"completed":1,"rewarded":0},
+            {"id":23,"completed":true,"rewarded":true},
+            {"id":26,"completed":false,"rewarded":false},
+            {"id":"27","completed":true,"rewarded":false}
+        ]});
+        assert_eq!(claimable_ids(&response).unwrap(), [22, 27]);
+        assert!(claimable_ids(&json!({"challenges":[]})).unwrap().is_empty());
+        assert!(claimable_ids(&json!({})).is_err());
+        let error = |status, message: &str| Error::CheckIn {
+            status,
+            message: message.into(),
+            response: Box::new(json!({})),
+        };
+        assert!(insufficient_tokens(&error(200, "Insufficient tokens")));
+        assert!(insufficient_tokens(&error(200, "Not enough points")));
+        assert!(!insufficient_tokens(&error(401, "Not enough points")));
+        assert!(!insufficient_tokens(&error(401, "Insufficient tokens")));
+        assert!(!insufficient_tokens(&error(200, "Other error")));
     }
 
     #[test]
