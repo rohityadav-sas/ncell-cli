@@ -22,6 +22,7 @@ ncell game status
 ncell game ranks
 ncell game spin --count 3 --delay 1.5s
 ncell game scratch --count 3 --delay 1.5s
+ncell game math --count 3 --delay 1.5s
 ncell game check-in
 ncell game claim-task 1,2,3
 ncell --help

@@ -110,6 +110,8 @@ enum GameCommand {
     Spin(GamePlayOptions),
     /// Scratch a card. Each card costs game tokens; stops on the first failure.
     Scratch(GamePlayOptions),
+    /// Automatically solve a math challenge. Each game costs game tokens.
+    Math(GamePlayOptions),
     /// Show weekly ranks, performance and prizes.
     Ranks,
     /// List game tasks, rewards and current progress.
@@ -175,12 +177,47 @@ pub fn run(args: Args) -> Result<()> {
                 client.check_in_url(&account.msisdn, &account.access_token)
             })?;
             let scratch = matches!(action, GameCommand::Scratch(_));
+            let math = matches!(action, GameCommand::Math(_));
             let id = match action {
                 GameCommand::Spin(GamePlayOptions { count, delay })
-                | GameCommand::Scratch(GamePlayOptions { count, delay }) => {
+                | GameCommand::Scratch(GamePlayOptions { count, delay })
+                | GameCommand::Math(GamePlayOptions { count, delay }) => {
                     for index in 0..count {
                         if index > 0 {
                             std::thread::sleep(delay);
+                        }
+                        if math {
+                            let response = ncell_cli::api::game_math(&url, |item| {
+                                let message = format!(
+                                    "Level {}: {} = {} | {} | Score {}",
+                                    formatted_number(&item["level"]),
+                                    text(&item["question"]),
+                                    text(&item["answer"]),
+                                    text(&item["response"]["result"]),
+                                    formatted_number(
+                                        item["response"]
+                                            .get("score")
+                                            .unwrap_or(&item["response"]["total_score"])
+                                    )
+                                );
+                                output(args.json, item.clone(), message);
+                                let _ = io::stdout().flush();
+                            })?;
+                            let message = format!(
+                                "Math {} | Score {} | Tokens awarded {}",
+                                response["result"]
+                                    .as_str()
+                                    .unwrap_or(if response["win"] == true {
+                                        "win"
+                                    } else {
+                                        "game_over"
+                                    }),
+                                formatted_number(&response["total_score"]),
+                                formatted_number(&response["bg_reward"])
+                            );
+                            output(args.json, response, message);
+                            io::stdout().flush().map_err(|_| Error::InvalidResponse)?;
+                            continue;
                         }
                         let response = if scratch {
                             ncell_cli::api::game_scratch(&url)?
@@ -794,10 +831,12 @@ mod tests {
                 parse_delay(input).unwrap(),
                 Duration::from_secs_f64(seconds)
             );
-            assert!(
-                Args::try_parse_from(["ncell", "game", "spin", "--count", "3", "--delay", input])
-                    .is_ok()
-            );
+            for game in ["spin", "scratch", "math"] {
+                assert!(
+                    Args::try_parse_from(["ncell", "game", game, "--count", "3", "--delay", input])
+                        .is_ok()
+                );
+            }
         }
         for input in ["-1", "NaN", "inf", "1e100", "1ms", "1h30m", "", "s"] {
             assert!(parse_delay(input).is_err());
@@ -825,6 +864,8 @@ mod tests {
             vec!["game", "status"],
             vec!["game", "ranks"],
             vec!["game", "spin"],
+            vec!["game", "scratch"],
+            vec!["game", "math"],
             vec!["game", "claim-task", "1,2,3"],
         ] {
             let args =

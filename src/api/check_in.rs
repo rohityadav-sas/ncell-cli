@@ -80,7 +80,7 @@ fn submit(
     }
 }
 
-fn csrf(web: &Client, url: &str) -> Result<String> {
+pub(super) fn csrf(web: &Client, url: &str) -> Result<String> {
     let page = web
         .get(url)
         .header("User-Agent", WEB_UA)
