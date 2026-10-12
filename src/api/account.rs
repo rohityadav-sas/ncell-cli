@@ -95,8 +95,7 @@ impl Client {
     }
 
     pub fn categories(&self, msisdn: &str, token: &str) -> Result<Value> {
-        let mut header = request_header(msisdn, "N/A");
-        header["appVersion"] = "8.2.1.0".into();
+        let header = request_header(msisdn, "N/A");
         let response = self.post(
             "/v1.0/product-catalog/tags",
             &json!({"requestHeader": header}),
@@ -130,7 +129,7 @@ impl Client {
                 .find(|t| t["id"] == category)
                 .and_then(|t| t["categories"].as_array())
                 .ok_or(Error::InvalidInput(
-                    "Unknown category. Use plans --list-categories",
+                    "Unknown category. Use ncell plans categories",
                 ))?;
             [
                 ("GSM_DATA", "data"),
@@ -146,7 +145,6 @@ impl Client {
             "msisdn": msisdn,
             "languageCode": "1",
             "tagId": category,
-            "sortby": { "name": "price" },
             "requestHeader": request_header(msisdn, "SHOP"),
         });
         if !keyword.is_empty() {

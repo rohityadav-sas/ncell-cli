@@ -20,6 +20,7 @@ ncell plans --category 50
 ncell plans subscribe 984 --category 50
 ncell game status
 ncell game ranks
+ncell game spin
 ncell game check-in
 ncell game claim-task 1,2,3
 ncell --help

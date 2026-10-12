@@ -1,4 +1,4 @@
-use super::check_in::web_client;
+use super::check_in::{WEB_UA, web_client};
 use crate::error::{Error, Result};
 use scraper::{ElementRef, Html, Selector};
 use serde_json::{Value, json};
@@ -6,12 +6,14 @@ use serde_json::{Value, json};
 pub fn game_ranks(url: &str) -> Result<Value> {
     let web = web_client()?;
     web.get(url)
+        .header("User-Agent", WEB_UA)
         .send()
         .map_err(Error::from_http)?
         .error_for_status()
         .map_err(Error::from_http)?;
     let html = web
         .get("https://sajeeb.com.np/ncellapp/checkin/ranks.php")
+        .header("User-Agent", WEB_UA)
         .send()
         .map_err(Error::from_http)?
         .error_for_status()

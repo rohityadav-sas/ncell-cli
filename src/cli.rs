@@ -48,7 +48,7 @@ enum Command {
     Balance,
     /// Query the subscriber profile; use --json for all details.
     Profile,
-    /// Daily check-in and game task rewards.
+    /// Game status, rewards and leaderboard.
     Game {
         #[command(subcommand)]
         action: GameCommand,
@@ -105,6 +105,8 @@ enum SmsCommand {
 
 #[derive(Subcommand)]
 enum GameCommand {
+    /// Spin the wheel once. Costs game tokens.
+    Spin,
     /// Show weekly ranks, performance and prizes.
     Ranks,
     /// List game tasks, rewards and current progress.
@@ -145,6 +147,17 @@ pub fn run(args: Args) -> Result<()> {
                 client.check_in_url(&account.msisdn, &account.access_token)
             })?;
             let id = match action {
+                GameCommand::Spin => {
+                    let response = ncell_cli::api::game_spin(&url)?;
+                    let message = format!(
+                        "Spin reward: {} | Tokens {} | Points {}",
+                        text(&response["description"]),
+                        formatted_number(&response["new_token_balance"]),
+                        formatted_number(&response["new_week_points"])
+                    );
+                    output(args.json, response, message);
+                    return Ok(());
+                }
                 GameCommand::Ranks => {
                     let response = ncell_cli::api::game_ranks(&url)?;
                     if args.json {
@@ -497,13 +510,8 @@ fn print_ranks(response: &Value) {
     );
     anstream::println!("  {dim}{}{dim:#}", "-".repeat(48));
     for player in players.into_iter().flatten() {
-        let style = if player["rank"].as_u64().is_some_and(|rank| rank <= 3) {
-            AnsiColor::Yellow.on_default()
-        } else {
-            Style::new()
-        };
-        anstream::println!(
-            "  {style}{:>4}{style:#}  {:<12}  {:>10}  {}",
+        println!(
+            "  {:>4}  {:<12}  {:>10}  {}",
             formatted_number(&player["rank"]),
             text(&player["number"]),
             formatted_number(&player["points"]),
@@ -744,6 +752,7 @@ mod tests {
             vec!["game", "check-in"],
             vec!["game", "status"],
             vec!["game", "ranks"],
+            vec!["game", "spin"],
             vec!["game", "claim-task", "1,2,3"],
         ] {
             let args =

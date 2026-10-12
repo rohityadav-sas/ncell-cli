@@ -15,13 +15,15 @@ pub fn check_in(url: &str, activities: &[u64], mut on_task: impl FnMut(&Value)) 
     )
 }
 
+pub(super) const WEB_UA: &str = "wv";
+
 pub(super) fn web_client() -> Result<Client> {
     Client::builder()
         .cookie_store(true)
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(90))
-        .user_agent("Mozilla/5.0 (Linux; Android 13; wv) AppleWebKit/537.36 Version/4.0 Chrome/120.0.0.0 Mobile Safari/537.36")
-        .build().map_err(Error::from_http)
+        .build()
+        .map_err(Error::from_http)
 }
 
 pub fn game_tasks(url: &str) -> Result<Value> {
@@ -34,11 +36,18 @@ pub fn game_tasks(url: &str) -> Result<Value> {
 
 fn tasks(web: &Client, url: &str, endpoint: &str) -> Result<Value> {
     web.get(url)
+        .header("User-Agent", WEB_UA)
         .send()
         .map_err(Error::from_http)?
         .error_for_status()
         .map_err(Error::from_http)?;
-    decode(web.get(endpoint).send().map_err(Error::from_http)?)
+    decode(
+        web.get(endpoint)
+            .header("User-Agent", WEB_UA)
+            .send()
+            .map_err(Error::from_http)?,
+        false,
+    )
 }
 
 fn submit(
@@ -48,32 +57,14 @@ fn submit(
     base: &str,
     on_task: &mut impl FnMut(&Value),
 ) -> Result<Value> {
-    let page = web.get(url).send().map_err(Error::from_http)?;
-    if !page.status().is_success() {
-        return Err(Error::CheckIn {
-            message: "Check-in website rejected the request".into(),
-            status: page.status().as_u16(),
-            response: Box::new(Value::Null),
-        });
-    }
-    let html = page.text().map_err(Error::from_http)?;
-    let document = Html::parse_document(&html);
-    let selector = Selector::parse("input[name=csrf_token]").unwrap();
-    let csrf = document
-        .select(&selector)
-        .next()
-        .and_then(|input| input.value().attr("value"))
-        .filter(|token| !token.is_empty())
-        .ok_or(Error::InvalidInput(
-            "Check-in page did not provide a CSRF token",
-        ))?;
+    let csrf = csrf(web, url)?;
     if activities.is_empty() {
-        claim(web, &format!("{base}/checkin.php"), csrf, None)
+        claim(web, &format!("{base}/checkin.php"), &csrf, None)
     } else {
         let results = activities
             .iter()
             .map(|&id| {
-                let response = claim(web, &format!("{base}/record_activity.php"), csrf, Some(id));
+                let response = claim(web, &format!("{base}/record_activity.php"), &csrf, Some(id));
                 let item = match response {
                     Ok(response) => Ok(serde_json::json!({"id": id, "response": response})),
                     Err(Error::CheckIn { response, .. }) => {
@@ -89,6 +80,52 @@ fn submit(
     }
 }
 
+fn csrf(web: &Client, url: &str) -> Result<String> {
+    let page = web
+        .get(url)
+        .header("User-Agent", WEB_UA)
+        .send()
+        .map_err(Error::from_http)?;
+    if !page.status().is_success() {
+        return Err(Error::CheckIn {
+            message: "Check-in website rejected the request".into(),
+            status: page.status().as_u16(),
+            response: Box::new(Value::Null),
+        });
+    }
+    let html = page.text().map_err(Error::from_http)?;
+    let document = Html::parse_document(&html);
+    let selector = Selector::parse("input[name=csrf_token]").unwrap();
+    document
+        .select(&selector)
+        .next()
+        .and_then(|input| input.value().attr("value"))
+        .filter(|token| !token.is_empty())
+        .ok_or(Error::InvalidInput(
+            "Check-in page did not provide a CSRF token",
+        ))
+        .map(str::to_owned)
+}
+
+pub fn game_spin(url: &str) -> Result<Value> {
+    let web = web_client()?;
+    spin(
+        &web,
+        url,
+        "https://sajeeb.com.np/ncellapp/checkin/fetchSpinReward.php",
+    )
+}
+
+fn spin(web: &Client, url: &str, endpoint: &str) -> Result<Value> {
+    let csrf = csrf(web, url)?;
+    let response = web
+        .post(endpoint)
+        .multipart(Form::new().text("csrf_token", csrf))
+        .send()
+        .map_err(Error::from_http)?;
+    decode(response, true)
+}
+
 fn claim(web: &Client, endpoint: &str, csrf: &str, activity: Option<u64>) -> Result<Value> {
     let mut form = Form::new().text("csrf_token", csrf.to_owned());
     if let Some(id) = activity {
@@ -96,16 +133,26 @@ fn claim(web: &Client, endpoint: &str, csrf: &str, activity: Option<u64>) -> Res
     }
     let response = web
         .post(endpoint)
+        .header("User-Agent", WEB_UA)
         .multipart(form)
         .send()
         .map_err(Error::from_http)?;
-    decode(response)
+    decode(response, false)
 }
 
-fn decode(response: reqwest::blocking::Response) -> Result<Value> {
+fn decode(response: reqwest::blocking::Response, reward: bool) -> Result<Value> {
     let status = response.status();
     let data: Value = response.json().map_err(|_| Error::InvalidResponse)?;
-    if !status.is_success() || data["success"] != true {
+    let success = if reward {
+        data["value"].is_string()
+            && data["new_token_balance"].is_number()
+            && data["new_week_points"].is_number()
+            && data["error"].is_null()
+            && data["success"] != false
+    } else {
+        data["success"] == true
+    };
+    if !status.is_success() || !success {
         return Err(Error::CheckIn {
             message: data["message"]
                 .as_str()
@@ -124,7 +171,48 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tasks_need_only_the_session_cookie_and_no_csrf_or_body() {
+    fn spin_uses_only_csrf_and_cookie_and_preserves_success_and_errors_without_retry() {
+        let mut server = mockito::Server::new();
+        for (body, valid) in [
+            (
+                r#"{"name":"50","description":"50 Points","value":"50","new_token_balance":235,"new_week_points":6615}"#,
+                true,
+            ),
+            (r#"{"success":false,"error":"Insufficient tokens"}"#, false),
+            (r#"{"success":true}"#, false),
+        ] {
+            let page = server
+                .mock("GET", "/index.php")
+                .match_header("user-agent", "wv")
+                .with_header("set-cookie", "PHPSESSID=spin-session; Path=/")
+                .with_body("<input name='csrf_token' value='spin-csrf'>")
+                .expect(1)
+                .create();
+            let claim = server
+                .mock("POST", "/fetchSpinReward.php")
+                .match_header("cookie", "PHPSESSID=spin-session")
+                .match_header("user-agent", mockito::Matcher::Missing)
+                .match_header("referer", mockito::Matcher::Missing)
+                .match_header("origin", mockito::Matcher::Missing)
+                .match_body(mockito::Matcher::Regex(
+                    "(?s)name=\"csrf_token\".*spin-csrf".into(),
+                ))
+                .with_body(body)
+                .expect(1)
+                .create();
+            let result = spin(
+                &web_client().unwrap(),
+                &format!("{}/index.php", server.url()),
+                &format!("{}/fetchSpinReward.php", server.url()),
+            );
+            assert_eq!(result.is_ok(), valid);
+            page.assert();
+            claim.assert();
+        }
+    }
+
+    #[test]
+    fn tasks_use_minimal_headers_without_csrf_or_body() {
         let mut server = mockito::Server::new();
         let page = server
             .mock("GET", "/index.php")

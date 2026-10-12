@@ -509,12 +509,14 @@ ncell plans subscribe 984 --category 50</code></pre>
                 <code>--sort</code> changes ordering (default price ascending). Sort keys accept commas or repeated
                 <code>--sort</code> options, with optional <code>:asc</code> or <code>:desc</code>.</p>
             <h3>Game rewards</h3>
+            <p><code>ncell game spin</code> spins the wheel once, spending game tokens. It prints the reward and updated token/point balances. Add <code>--json</code> for the raw server response. Spins are never automatically retried.</p>
             <p><code>ncell game ranks</code> shows weekly performance, last week's result, the top players and prize tiers. This endpoint returns HTML; <code>--json</code> contains the extracted fields, with masked player numbers preserved.</p>
             <p><code>ncell game status</code> lists task IDs, progress, token and XP rewards, reset periods, and status. Use an ID from this list with <code>game claim-task</code>. Claimed tasks are green, completed tasks are yellow, and pending tasks use the default color. Colors are disabled for redirected output. Listing tasks does not claim rewards; <code>--json</code> includes the full response and summary.</p>
             <pre data-lang="Shell"><code>ncell game status
 ncell game status --json
 ncell game ranks
 ncell game ranks --json
+ncell game spin
 ncell game check-in
 ncell game claim-task 1,2,3
 ncell game claim-task 1 2 3 --json</code></pre>
@@ -567,6 +569,10 @@ ncell game claim-task 1 2 3 --json</code></pre>
                         <tr>
                             <td><code>game ranks</code></td>
                             <td>Weekly leaderboard, performance and prizes</td>
+                        </tr>
+                        <tr>
+                            <td><code>game spin</code></td>
+                            <td>Spin once using game tokens</td>
                         </tr>
                         <tr>
                             <td><code>game check-in</code></td>
