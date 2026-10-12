@@ -5,10 +5,14 @@ use serde_json::{Value, json};
 
 const ENDPOINT: &str = "https://sajeeb.com.np/ncellapp/checkin/math_challenge_api.php";
 
-pub fn game_math(url: &str, on_answer: impl FnMut(&Value)) -> Result<Value> {
+pub fn game_math(
+    url: &str,
+    on_answer: impl FnMut(&Value),
+    manual_answer: impl FnMut(&Value) -> Result<String>,
+) -> Result<Value> {
     let web = web_client()?;
     let csrf = csrf(&web, url)?;
-    play(&web, ENDPOINT, &csrf, on_answer)
+    play(&web, ENDPOINT, &csrf, on_answer, manual_answer)
 }
 
 fn play(
@@ -16,6 +20,7 @@ fn play(
     endpoint: &str,
     csrf: &str,
     mut on_answer: impl FnMut(&Value),
+    mut manual_answer: impl FnMut(&Value) -> Result<String>,
 ) -> Result<Value> {
     let start = request(web, endpoint, csrf, "start_game", None)?;
     if start["success"] != true {
@@ -27,7 +32,11 @@ fn play(
         if question["win"] == true || question["game_over"] == true {
             return Ok(question);
         }
-        let answer = solve(&question)?;
+        let answer = match solve(&question) {
+            Ok(answer) => answer,
+            Err(Error::InvalidInput(_)) => manual_answer(&question)?,
+            Err(error) => return Err(error),
+        };
         let response = request(web, endpoint, csrf, "submit_answer", Some(&answer))?;
         on_answer(
             &json!({"level":question["level"], "question":question["question"],
@@ -137,6 +146,50 @@ mod tests {
     }
 
     #[test]
+    fn unsupported_question_submits_manual_answer_and_continues() {
+        let mut server = mockito::Server::new();
+        let start = server
+            .mock("POST", "/math")
+            .match_body(mockito::Matcher::Regex(
+                "(?s)name=\"action\".*start_game".into(),
+            ))
+            .with_body(r#"{"success":true}"#)
+            .expect(1)
+            .create();
+        let question = server
+            .mock("POST", "/math")
+            .match_body(mockito::Matcher::Regex(
+                "(?s)name=\"action\".*get_question".into(),
+            ))
+            .with_body(r#"{"question":"unknown(5)","options":[2,4],"level":20}"#)
+            .expect(1)
+            .create();
+        let answer = server
+            .mock("POST", "/math")
+            .match_body(mockito::Matcher::Regex(
+                "(?s)name=\"action\".*submit_answer.*name=\"answer\"\r\n\r\n2\r\n".into(),
+            ))
+            .with_body(r#"{"result":"win","total_score":155}"#)
+            .expect(1)
+            .create();
+        let response = play(
+            &web_client().unwrap(),
+            &format!("{}/math", server.url()),
+            "csrf",
+            |_| (),
+            |question| {
+                assert_eq!(question["question"], "unknown(5)");
+                Ok("2".into())
+            },
+        )
+        .unwrap();
+        assert_eq!(response["result"], "win");
+        start.assert();
+        question.assert();
+        answer.assert();
+    }
+
+    #[test]
     fn plays_in_order_and_preserves_win_without_replaying_answers() {
         let mut server = mockito::Server::new();
         let mut mocks = Vec::new();
@@ -172,6 +225,7 @@ mod tests {
             |item| {
                 assert_eq!(item["answer"], "2");
             },
+            |_| panic!("Supported questions should not prompt"),
         )
         .unwrap();
         assert_eq!(result["total_score"], 155);

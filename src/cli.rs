@@ -187,22 +187,32 @@ pub fn run(args: Args) -> Result<()> {
                             std::thread::sleep(delay);
                         }
                         if math {
-                            let response = ncell_cli::api::game_math(&url, |item| {
-                                let message = format!(
-                                    "Level {}: {} = {} | {} | Score {}",
-                                    formatted_number(&item["level"]),
-                                    text(&item["question"]),
-                                    text(&item["answer"]),
-                                    text(&item["response"]["result"]),
-                                    formatted_number(
-                                        item["response"]
-                                            .get("score")
-                                            .unwrap_or(&item["response"]["total_score"])
+                            let response = ncell_cli::api::game_math(
+                                &url,
+                                |item| {
+                                    let message = format!(
+                                        "Level {}: {} = {} | {} | Score {}",
+                                        formatted_number(&item["level"]),
+                                        text(&item["question"]),
+                                        text(&item["answer"]),
+                                        text(&item["response"]["result"]),
+                                        formatted_number(
+                                            item["response"]
+                                                .get("score")
+                                                .unwrap_or(&item["response"]["total_score"])
+                                        )
+                                    );
+                                    output(args.json, item.clone(), message);
+                                    let _ = io::stdout().flush();
+                                },
+                                |question| {
+                                    manual_math_answer(
+                                        question,
+                                        &mut io::stdin().lock(),
+                                        &mut io::stderr().lock(),
                                     )
-                                );
-                                output(args.json, item.clone(), message);
-                                let _ = io::stdout().flush();
-                            })?;
+                                },
+                            )?;
                             let message = format!(
                                 "Math {} | Score {} | Tokens awarded {}",
                                 response["result"]
@@ -690,6 +700,46 @@ fn text(value: &Value) -> &str {
     value.as_str().unwrap_or("")
 }
 
+fn manual_math_answer(
+    question: &Value,
+    input: &mut impl io::BufRead,
+    prompt: &mut impl Write,
+) -> Result<String> {
+    let options = question["options"]
+        .as_array()
+        .ok_or(Error::InvalidResponse)?;
+    let failed = || Error::InvalidInput("Could not read a manual math answer; game stopped");
+    writeln!(
+        prompt,
+        "Cannot solve automatically: {}\nOptions: {}\nTime limit: {} seconds",
+        text(&question["question"]),
+        options
+            .iter()
+            .map(Value::to_string)
+            .collect::<Vec<_>>()
+            .join(", "),
+        formatted_number(&question["time"])
+    )
+    .map_err(|_| failed())?;
+    loop {
+        write!(prompt, "Enter answer value: ")
+            .and_then(|_| prompt.flush())
+            .map_err(|_| failed())?;
+        let mut answer = String::new();
+        if input.read_line(&mut answer).map_err(|_| failed())? == 0 {
+            return Err(failed());
+        }
+        if let Ok(answer) = answer.trim().parse::<f64>()
+            && let Some(option) = options
+                .iter()
+                .find(|option| option.as_f64() == Some(answer))
+        {
+            return Ok(option.to_string());
+        }
+        writeln!(prompt, "Choose one of the displayed answer values.").map_err(|_| failed())?;
+    }
+}
+
 fn output(json: bool, data: Value, message: impl std::fmt::Display) {
     if json {
         println!("{data}");
@@ -816,6 +866,22 @@ mod tests {
         ] {
             assert!(Args::try_parse_from(std::iter::once("ncell").chain(command)).is_err());
         }
+    }
+
+    #[test]
+    fn manual_math_answer_validates_options_and_stops_on_eof() {
+        let question = json!({"question":"unknown(5)","options":[2,4],"time":30});
+        let mut prompt = Vec::new();
+        assert_eq!(
+            manual_math_answer(&question, &mut &b"bad\n99\n2\n"[..], &mut prompt).unwrap(),
+            "2"
+        );
+        assert!(
+            String::from_utf8(prompt)
+                .unwrap()
+                .contains("Choose one of the displayed answer values.")
+        );
+        assert!(manual_math_answer(&question, &mut &b""[..], &mut Vec::new()).is_err());
     }
 
     #[test]
