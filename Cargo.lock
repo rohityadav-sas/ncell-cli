@@ -1410,6 +1410,7 @@ dependencies = [
 name = "ncell-cli"
 version = "0.1.0"
 dependencies = [
+ "anstream",
  "chrono",
  "clap",
  "keyring",

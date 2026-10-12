@@ -509,7 +509,7 @@ ncell plans subscribe 984 --category 50</code></pre>
                 <code>--sort</code> changes ordering (default price ascending). Sort keys accept commas or repeated
                 <code>--sort</code> options, with optional <code>:asc</code> or <code>:desc</code>.</p>
             <h3>Game rewards</h3>
-            <p><code>ncell game status</code> lists task IDs, progress, token and XP rewards, reset periods, and status. Use an ID from this list with <code>game claim-task</code>. Listing tasks does not claim rewards; <code>--json</code> includes the full response and summary.</p>
+            <p><code>ncell game status</code> lists task IDs, progress, token and XP rewards, reset periods, and status. Use an ID from this list with <code>game claim-task</code>. Claimed tasks are green, completed tasks are yellow, and pending tasks use the default color. Colors are disabled for redirected output. Listing tasks does not claim rewards; <code>--json</code> includes the full response and summary.</p>
             <pre data-lang="Shell"><code>ncell game status
 ncell game status --json
 ncell game check-in

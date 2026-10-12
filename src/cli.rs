@@ -1,3 +1,4 @@
+use clap::builder::styling::{AnsiColor, Style};
 use clap::{Parser, Subcommand};
 use ncell_cli::{
     api::Client,
@@ -469,8 +470,13 @@ fn print_tasks(response: &Value) -> Result<()> {
         } else {
             "Pending"
         };
-        println!(
-            "{:<6}  {:<width$}  {:>9}  {:>6}  {:>6}  {:<8}  {status}",
+        let style = match status {
+            "Claimed" => AnsiColor::Green.on_default(),
+            "Completed" => AnsiColor::Yellow.on_default(),
+            _ => Style::new(),
+        };
+        anstream::println!(
+            "{:<6}  {:<width$}  {:>9}  {:>6}  {:>6}  {:<8}  {style}{status}{style:#}",
             task["id"].to_string(),
             text(&task["title"]),
             progress,
