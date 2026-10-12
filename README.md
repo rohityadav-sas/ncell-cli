@@ -15,9 +15,9 @@
 ```sh
 ncell login 98XXXXXXXX
 ncell balance
-ncell categories
+ncell plans categories
 ncell plans --category 50
-ncell subscribe 984 --category 50
+ncell plans subscribe 984 --category 50
 ncell game check-in
 ncell game claim-task 1,2,3
 ncell --help
@@ -28,7 +28,7 @@ Actions and required inputs are plain words; options use `--long-name` (no short
 ## Example
 
 ```sh
-ncell search "SMS" --category 50 --sort price
+ncell plans search "SMS" --category 50 --sort price
 ```
 
 ### Output

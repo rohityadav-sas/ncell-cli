@@ -357,7 +357,7 @@
             </nav>
 
             <h2 id="example">Example</h2>
-            <pre data-lang="Shell"><code>ncell search "SMS" --category 50 --sort price</code></pre>
+            <pre data-lang="Shell"><code>ncell plans search "SMS" --category 50 --sort price</code></pre>
             <pre data-lang="Output"><code>ID    Plan                      Price     Validity
 984   1 Day: 100 All Net SMS    Rs. 15    1 DAY
 985   7 Day: 300 All Net SMS    Rs. 45    7 DAY
@@ -422,7 +422,7 @@ ncell profile
 
             <h2 id="plans">Plans and categories</h2>
             <pre data-lang="Shell"><code>ncell plans
-ncell categories
+ncell plans categories
 ncell plans --category 50
 ncell plans --category 61
 ncell plans --category 66 --json</code></pre>
@@ -452,12 +452,12 @@ ncell plans --category 66 --json</code></pre>
             </div>
 
             <h2 id="searching">Search and sorting</h2>
-            <pre data-lang="Shell"><code>ncell search "SMS" --category 50
-ncell search "Super" --sort price
-ncell search "Combo" --sort validity:desc,price:asc</code></pre>
+            <pre data-lang="Shell"><code>ncell plans search "SMS" --category 50
+ncell plans search "Super" --sort price
+ncell plans search "Combo" --sort validity:desc,price:asc</code></pre>
 
             <h3 id="searching-sort">Sort by more than one field</h3>
-            <pre data-lang="Shell"><code>ncell search "SMS" --category 50 --sort validity:desc,price:asc
+            <pre data-lang="Shell"><code>ncell plans search "SMS" --category 50 --sort validity:desc,price:asc
 ncell plans --sort validity:desc --sort price:asc
 ncell plans --sort validity,price</code></pre>
             <p>
@@ -468,14 +468,14 @@ ncell plans --sort validity,price</code></pre>
 
             <h2 id="subscribe">Subscribe to a plan</h2>
             <pre data-lang="Shell"><code>ncell plans --category 50
-ncell subscribe 984 --category 50</code></pre>
+ncell plans subscribe 984 --category 50</code></pre>
             <p>
                 Use the category ID from the category list. <code>--id</code> is required;
                 <code>--category</code> defaults to 66.
             </p>
 
             <h2 id="sms">Send Free SMS</h2>
-            <pre data-lang="Shell"><code>ncell send-free-sms 98XXXXXXXX "Hello"</code></pre>
+            <pre data-lang="Shell"><code>ncell sms send-free 98XXXXXXXX "Hello"</code></pre>
 
             <h2 id="sessions">Sessions and token refresh</h2>
             <p>
@@ -501,7 +501,7 @@ ncell subscribe 984 --category 50</code></pre>
 
 
             <h2 id="commands">Command reference</h2>
-            <p>Use plain words for actions and required inputs, and <code>--long-name</code> for options.
+            <p>Group related actions under their resource: <code>plans categories</code>, <code>plans search</code>, <code>plans subscribe</code>, <code>sms send-free</code>, and <code>game check-in</code>. Use plain words for actions and required inputs, and <code>--long-name</code> for options.
                 Commands and options use lowercase kebab-case. Short flags such as <code>-h</code> are not supported.
                 Quote inputs containing spaces. Use <code>--</code> before a positional value beginning with a dash.
                 Options such as <code>--category 50</code> also accept <code>--category=50</code>.</p>
@@ -551,7 +551,7 @@ ncell game claim-task 1 2 3 --json</code></pre>
                             </td>
                         </tr>
                         <tr>
-                            <td><code>categories</code></td>
+                            <td><code>plans categories</code></td>
                             <td>List catalog categories</td>
                         </tr>
                         <tr>
@@ -563,20 +563,20 @@ ncell game claim-task 1 2 3 --json</code></pre>
                             <td><code>&lt;ids&gt;</code> — comma-separated or space-separated task IDs</td>
                         </tr>
                         <tr>
-                            <td><code>search</code></td>
+                            <td><code>plans search</code></td>
                             <td>
                                 <code>&lt;keyword&gt; [--category &lt;id&gt;]
                                         [--sort &lt;keys&gt;]</code>
                             </td>
                         </tr>
                         <tr>
-                            <td><code>subscribe</code></td>
+                            <td><code>plans subscribe</code></td>
                             <td>
                                 <code>&lt;plan-id&gt; [--category &lt;id&gt;]</code>
                             </td>
                         </tr>
                         <tr>
-                            <td><code>send-free-sms</code></td>
+                            <td><code>sms send-free</code></td>
                             <td>
                                 <code>&lt;number&gt; &lt;text&gt;</code>
                             </td>

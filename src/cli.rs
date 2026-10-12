@@ -51,26 +51,41 @@ enum Command {
         #[command(subcommand)]
         action: GameCommand,
     },
-    /// Send a free SMS to a Nepal mobile number.
-    SendFreeSms { number: String, text: String },
+    /// Send SMS messages.
+    Sms {
+        #[command(subcommand)]
+        action: SmsCommand,
+    },
+    /// Browse, search and subscribe to plans.
+    #[command(args_conflicts_with_subcommands = true)]
+    Plans {
+        #[command(flatten)]
+        options: PlanOptions,
+        #[command(subcommand)]
+        action: Option<PlanCommand>,
+    },
+    /// Rotate saved tokens. Synchronize them to any app sharing this session.
+    Refresh,
+}
+
+#[derive(clap::Args)]
+struct PlanOptions {
+    #[arg(long, default_value_t = 66)]
+    category: u64,
+    /// Ordered fields: price or validity, optionally followed by :asc or :desc.
+    #[arg(long, value_delimiter = ',', value_parser = parse_sort, default_value = "price", value_name = "FIELD[:asc|desc],...")]
+    sort: Vec<(Sort, bool)>,
+}
+
+#[derive(Subcommand)]
+enum PlanCommand {
+    /// List catalog categories.
+    Categories,
     /// Search plans on the server within a catalog category.
     Search {
         keyword: String,
-        #[arg(long, default_value_t = 66)]
-        category: u64,
-        /// Ordered fields: price or validity, optionally followed by :asc or :desc.
-        #[arg(long, value_delimiter = ',', value_parser = parse_sort, default_value = "price", value_name = "FIELD[:asc|desc],...")]
-        sort: Vec<(Sort, bool)>,
-    },
-    /// List catalog categories.
-    Categories,
-    /// List available packs.
-    Plans {
-        #[arg(long, default_value_t = 66)]
-        category: u64,
-        /// Ordered fields: price or validity, optionally followed by :asc or :desc.
-        #[arg(long, value_delimiter = ',', value_parser = parse_sort, default_value = "price", value_name = "FIELD[:asc|desc],...")]
-        sort: Vec<(Sort, bool)>,
+        #[command(flatten)]
+        options: PlanOptions,
     },
     /// Subscribe to a listed plan. Paid packs charge your Ncell account.
     Subscribe {
@@ -78,8 +93,12 @@ enum Command {
         #[arg(long, default_value_t = 66)]
         category: u64,
     },
-    /// Rotate saved tokens. Synchronize them to any app sharing this session.
-    Refresh,
+}
+
+#[derive(Subcommand)]
+enum SmsCommand {
+    /// Send a free SMS to a Nepal mobile number.
+    SendFree { number: String, text: String },
 }
 
 #[derive(Subcommand)]
@@ -170,7 +189,9 @@ pub fn run(args: Args) -> Result<()> {
                 }
             }
         }
-        Command::SendFreeSms { number, text } => {
+        Command::Sms {
+            action: SmsCommand::SendFree { number, text },
+        } => {
             let response = authenticated(|client, account, _| {
                 client.send_free_sms(&account.msisdn, &account.access_token, &number, &text)
             })?;
@@ -180,7 +201,10 @@ pub fn run(args: Args) -> Result<()> {
                 format!("SMS sent to {}.", normalize_number(&number)?),
             );
         }
-        Command::Subscribe { id, category } => {
+        Command::Plans {
+            action: Some(PlanCommand::Subscribe { id, category }),
+            ..
+        } => {
             let (response, name) = authenticated(|client, account, device_id| {
                 let catalog = client.plans(&account.msisdn, &account.access_token, category)?;
                 let plan = catalog["availablePackages"]
@@ -254,31 +278,44 @@ pub fn run(args: Args) -> Result<()> {
                 "Local session removed.",
             );
         }
-        command @ (Command::Balance
-        | Command::Profile
-        | Command::Plans { .. }
-        | Command::Search { .. }
-        | Command::Categories) => {
+        command @ (Command::Balance | Command::Profile | Command::Plans { .. }) => {
             let profile = matches!(command, Command::Profile);
-            let plans = matches!(command, Command::Plans { .. } | Command::Search { .. });
-            let list_categories = matches!(command, Command::Categories);
+            let plans = matches!(command, Command::Plans { .. });
+            let list_categories = matches!(
+                command,
+                Command::Plans {
+                    action: Some(PlanCommand::Categories),
+                    ..
+                }
+            );
+            let (options, keyword) = match &command {
+                Command::Plans {
+                    action: Some(PlanCommand::Search { keyword, options }),
+                    ..
+                } => (Some(options), keyword.as_str()),
+                Command::Plans { options, .. } => (Some(options), ""),
+                _ => (None, ""),
+            };
             let (mut data, number) = authenticated(|client, account, _| {
                 let data = if list_categories {
                     client.categories(&account.msisdn, &account.access_token)?
                 } else if plans {
-                    let (category, search) = match &command {
-                        Command::Plans { category, .. } => (*category, ""),
-                        Command::Search {
-                            category, keyword, ..
-                        } => {
-                            if keyword.trim().is_empty() {
-                                return Err(Error::InvalidInput("Search text cannot be empty"));
-                            }
-                            (*category, keyword.as_str())
+                    if matches!(
+                        &command,
+                        Command::Plans {
+                            action: Some(PlanCommand::Search { .. }),
+                            ..
                         }
-                        _ => unreachable!(),
-                    };
-                    client.search_plans(&account.msisdn, &account.access_token, category, search)?
+                    ) && keyword.trim().is_empty()
+                    {
+                        return Err(Error::InvalidInput("Search text cannot be empty"));
+                    }
+                    client.search_plans(
+                        &account.msisdn,
+                        &account.access_token,
+                        options.unwrap().category,
+                        keyword,
+                    )?
                 } else if profile {
                     client.profile(&account.msisdn, &account.access_token)?
                 } else {
@@ -286,12 +323,14 @@ pub fn run(args: Args) -> Result<()> {
                 };
                 Ok((data, account.msisdn.clone()))
             })?;
-            if let Command::Plans { sort, .. } | Command::Search { sort, .. } = command {
+            if let Some(options) = options.filter(|_| !list_categories) {
                 let packages = data["availablePackages"]
                     .as_array_mut()
                     .ok_or(Error::InvalidResponse)?;
                 packages.sort_by(|a, b| {
-                    sort.iter()
+                    options
+                        .sort
+                        .iter()
                         .map(|&(field, descending)| {
                             let order = sort_key(a, field).total_cmp(&sort_key(b, field));
                             if descending { order.reverse() } else { order }
@@ -493,6 +532,40 @@ mod tests {
     }
 
     #[test]
+    fn resource_actions_are_scoped_and_options_stay_with_their_action() {
+        for command in [
+            vec!["plans"],
+            vec!["plans", "--category", "50"],
+            vec!["plans", "categories"],
+            vec![
+                "plans",
+                "search",
+                "SMS",
+                "--category",
+                "50",
+                "--sort",
+                "validity:desc,price:asc",
+            ],
+            vec!["plans", "subscribe", "984", "--category", "50"],
+            vec!["sms", "send-free", "9812345678", "Hello"],
+        ] {
+            assert!(Args::try_parse_from(std::iter::once("ncell").chain(command)).is_ok());
+        }
+        for command in [
+            vec!["categories"],
+            vec!["search", "SMS"],
+            vec!["subscribe", "984"],
+            vec!["send-free-sms", "9812345678", "Hello"],
+            vec!["plans", "subscribe"],
+            vec!["sms"],
+            vec!["plans", "--category", "50", "search", "SMS"],
+            vec!["plans", "categories", "--sort", "price"],
+        ] {
+            assert!(Args::try_parse_from(std::iter::once("ncell").chain(command)).is_err());
+        }
+    }
+
+    #[test]
     fn json_is_available_on_every_command() {
         for command in [
             vec!["login", "9812345678", "--verify"],
@@ -500,11 +573,11 @@ mod tests {
             vec!["logout"],
             vec!["balance"],
             vec!["profile"],
-            vec!["search", "Super", "--category", "66"],
+            vec!["plans", "search", "Super", "--category", "66"],
             vec!["plans"],
-            vec!["send-free-sms", "9812345678", "Hello"],
-            vec!["categories"],
-            vec!["subscribe", "1225"],
+            vec!["sms", "send-free", "9812345678", "Hello"],
+            vec!["plans", "categories"],
+            vec!["plans", "subscribe", "1225"],
             vec!["refresh"],
             vec!["game", "check-in"],
             vec!["game", "claim-task", "1,2,3"],
@@ -525,11 +598,11 @@ mod tests {
     fn sort_arguments_accept_multiple_keys_and_reject_invalid_values() {
         let args =
             Args::try_parse_from(["ncell", "plans", "--sort", "validity:desc,price:asc"]).unwrap();
-        let Command::Plans { sort, .. } = args.command else {
+        let Command::Plans { options, .. } = args.command else {
             panic!("expected plans")
         };
         assert!(matches!(
-            sort.as_slice(),
+            options.sort.as_slice(),
             [(Sort::Validity, true), (Sort::Price, false)]
         ));
         assert!(matches!(parse_sort("price"), Ok((Sort::Price, false))));
