@@ -153,18 +153,3 @@ chmod +x ncell
 Linux credential storage requires an unlocked Secret Service provider, such as GNOME Keyring or KWallet with Secret Service enabled.
 
 3. (Optional) Add the directory containing the executable to your `PATH` to run `ncell` from anywhere.
-
-## Scripts
-
-Save commands in a reusable script. Creating a script opens it in your text editor.
-
-```sh
-ncell script create daily.ncell
-ncell script run daily.ncell
-```
-
-Use `script list`, `script edit daily.ncell` and `script delete daily.ncell` to manage saved scripts. Scripts are checked before running and stop on the first failure.
-
-Use `game claim-task all` to claim completed, unclaimed tasks. Use `--count all` with spin, scratch or math to spend the available game tokens.
-
-See the [Scripts guide](https://rohityadav-sas.github.io/ncell-cli/#scripts) for file format and examples.
