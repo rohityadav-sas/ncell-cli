@@ -461,11 +461,7 @@ fn print_ranks(response: &Value) {
     let current = &response["performance"];
     if !current.is_null() {
         anstream::println!(
-            "\n{heading}Your performance{heading:#}  {dim}{}{dim:#}",
-            text(&current["period"])
-        );
-        println!(
-            "  Rank    #{}\n  Points  {}\n  Tokens  {}\n  Streak  {} days",
+            "{heading}Your performance:{heading:#} Rank #{} | Points {} | Tokens {} | Streak {} days",
             formatted_number(&current["rank"]),
             formatted_number(&current["points"]),
             formatted_number(&current["tokens"]),
@@ -475,11 +471,7 @@ fn print_ranks(response: &Value) {
     let last = &response["last_week"];
     if !last.is_null() {
         anstream::println!(
-            "\n{heading}Last week{heading:#}  {dim}{}{dim:#}",
-            text(&last["period"])
-        );
-        println!(
-            "  Rank    #{}\n  Points  {}\n  Prize   {}",
+            "{heading}Last week:{heading:#} Rank #{} | Points {} | Prize {}",
             formatted_number(&last["rank"]),
             formatted_number(&last["points"]),
             text(&last["prize"]).trim_start_matches(|c: char| !c.is_ascii_alphanumeric())
