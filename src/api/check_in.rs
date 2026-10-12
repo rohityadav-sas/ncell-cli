@@ -4,7 +4,7 @@ use scraper::{Html, Selector};
 use serde_json::Value;
 use std::time::Duration;
 
-pub fn check_in(url: &str, activities: &[u64]) -> Result<Value> {
+pub fn check_in(url: &str, activities: &[u64], mut on_task: impl FnMut(&Value)) -> Result<Value> {
     let web = Client::builder()
         .cookie_store(true)
         .redirect(reqwest::redirect::Policy::none())
@@ -16,10 +16,17 @@ pub fn check_in(url: &str, activities: &[u64]) -> Result<Value> {
         url,
         activities,
         "https://sajeeb.com.np/ncellapp/checkin/api",
+        &mut on_task,
     )
 }
 
-fn submit(web: &Client, url: &str, activities: &[u64], base: &str) -> Result<Value> {
+fn submit(
+    web: &Client,
+    url: &str,
+    activities: &[u64],
+    base: &str,
+    on_task: &mut impl FnMut(&Value),
+) -> Result<Value> {
     let page = web.get(url).send().map_err(Error::from_http)?;
     if !page.status().is_success() {
         return Err(Error::CheckIn {
@@ -46,13 +53,15 @@ fn submit(web: &Client, url: &str, activities: &[u64], base: &str) -> Result<Val
             .iter()
             .map(|&id| {
                 let response = claim(web, &format!("{base}/record_activity.php"), csrf, Some(id));
-                match response {
+                let item = match response {
                     Ok(response) => Ok(serde_json::json!({"id": id, "response": response})),
                     Err(Error::CheckIn { response, .. }) => {
                         Ok(serde_json::json!({"id": id, "response": response}))
                     }
                     Err(error) => Err(error),
-                }
+                }?;
+                on_task(&item);
+                Ok(item)
             })
             .collect::<Result<Vec<_>>>()?;
         Ok(Value::Array(results))
@@ -111,6 +120,9 @@ mod tests {
             &format!("{}/earnmore.php", server.url()),
             &[1, 2],
             &format!("{}/api", server.url()),
+            &mut |item| {
+                assert_eq!(claim.matched(), item["id"] == 2);
+            },
         )
         .unwrap();
         assert_eq!(result[0]["response"]["points_awarded"], 25);
@@ -142,6 +154,7 @@ mod tests {
             &format!("{}/index.php", server.url()),
             &[],
             &format!("{}/api", server.url()),
+            &mut |_| panic!("Daily check-in must not emit task output"),
         )
         .unwrap_err();
         match error {

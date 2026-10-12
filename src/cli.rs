@@ -143,7 +143,11 @@ pub fn run(args: Args) -> Result<()> {
             let url = authenticated(|client, account, _| {
                 client.check_in_url(&account.msisdn, &account.access_token)
             })?;
-            let response = ncell_cli::api::check_in(&url, &id)?;
+            let response = ncell_cli::api::check_in(&url, &id, |item| {
+                if !args.json {
+                    print_task(item);
+                }
+            })?;
             if id.is_empty() {
                 let message = format!(
                     "Check-in successful. Streak: {} days. Weekly points: {}. Game tokens: {}.",
@@ -155,29 +159,6 @@ pub fn run(args: Args) -> Result<()> {
             } else {
                 let results = response.as_array().unwrap();
                 let failed = results.iter().any(|item| task_failed(&item["response"]));
-                if !args.json {
-                    for item in results {
-                        let data = &item["response"];
-                        if data["success"] == true {
-                            println!(
-                                "Task {} claimed. Tokens awarded: {}. Game tokens: {}. Weekly points: {}.",
-                                item["id"],
-                                data["points_awarded"],
-                                data["new_token_balance"],
-                                data["new_week_points"]
-                            );
-                        } else {
-                            println!(
-                                "Task {}: {}",
-                                item["id"],
-                                data["message"]
-                                    .as_str()
-                                    .or_else(|| data["error"].as_str())
-                                    .unwrap_or("Claim failed")
-                            );
-                        }
-                    }
-                }
                 if failed {
                     return Err(Error::GameTasks {
                         response: Box::new(response),
@@ -447,6 +428,25 @@ pub fn run(args: Args) -> Result<()> {
 
 fn authenticated<T>(request: impl Fn(&Client, &Account, &str) -> Result<T>) -> Result<T> {
     AuthService::new(Client::new()?, KeyringStore::new()?).authenticated(request)
+}
+
+fn print_task(item: &Value) {
+    let data = &item["response"];
+    if data["success"] == true {
+        println!(
+            "Task {} claimed. Tokens awarded: {}. Game tokens: {}. Weekly points: {}.",
+            item["id"], data["points_awarded"], data["new_token_balance"], data["new_week_points"]
+        );
+    } else {
+        println!(
+            "Task {}: {}",
+            item["id"],
+            data["message"]
+                .as_str()
+                .or_else(|| data["error"].as_str())
+                .unwrap_or("Claim failed")
+        );
+    }
 }
 
 fn task_failed(response: &Value) -> bool {
