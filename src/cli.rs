@@ -9,7 +9,8 @@ use serde_json::{Value, json};
 
 #[derive(Parser)]
 #[command(
-    name = "ncell",
+    name = "ncell-cli",
+    bin_name = "ncell",
     version,
     about = "Ncell account CLI",
     disable_help_flag = true,
@@ -45,8 +46,11 @@ enum Command {
     Balance,
     /// Query the subscriber profile; use --json for all details.
     Profile,
-    /// Claim the daily check-in reward.
-    CheckIn,
+    /// Daily check-in and game task rewards.
+    Game {
+        #[command(subcommand)]
+        action: GameCommand,
+    },
     /// Send a free SMS to a Nepal mobile number.
     SendFreeSms { number: String, text: String },
     /// Search plans on the server within a catalog category.
@@ -58,29 +62,35 @@ enum Command {
         #[arg(long, value_delimiter = ',', value_parser = parse_sort, default_value = "price", value_name = "FIELD[:asc|desc],...")]
         sort: Vec<(Sort, bool)>,
     },
-    /// List available packs or catalog categories.
+    /// List catalog categories.
+    Categories,
+    /// List available packs.
     Plans {
-        /// Search plans on the server.
-        #[arg(long, conflicts_with = "list_categories")]
-        search: Option<String>,
-        #[arg(long, default_value_t = 66, conflicts_with = "list_categories")]
+        #[arg(long, default_value_t = 66)]
         category: u64,
-        /// List category IDs, names and pack types.
-        #[arg(long, conflicts_with = "sort")]
-        list_categories: bool,
         /// Ordered fields: price or validity, optionally followed by :asc or :desc.
         #[arg(long, value_delimiter = ',', value_parser = parse_sort, default_value = "price", value_name = "FIELD[:asc|desc],...")]
         sort: Vec<(Sort, bool)>,
     },
     /// Subscribe to a listed plan. Paid packs charge your Ncell account.
     Subscribe {
-        #[arg(long)]
         id: String,
         #[arg(long, default_value_t = 66)]
         category: u64,
     },
     /// Rotate saved tokens. Synchronize them to any app sharing this session.
     Refresh,
+}
+
+#[derive(Subcommand)]
+enum GameCommand {
+    /// Claim the daily check-in reward.
+    CheckIn,
+    /// Claim completed tasks in order; accepts comma-separated IDs.
+    ClaimTask {
+        #[arg(required = true, value_delimiter = ',', num_args = 1.., value_parser = clap::value_parser!(u64).range(1..))]
+        ids: Vec<u64>,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -104,32 +114,61 @@ fn parse_sort(value: &str) -> std::result::Result<(Sort, bool), String> {
 }
 
 pub fn run(args: Args) -> Result<()> {
-    let command = match args.command {
-        Command::Search {
-            keyword,
-            category,
-            sort,
-        } => Command::Plans {
-            search: Some(keyword),
-            category,
-            list_categories: false,
-            sort,
-        },
-        command => command,
-    };
-    match command {
-        Command::CheckIn => {
+    match args.command {
+        Command::Game { action } => {
+            let id = match action {
+                GameCommand::CheckIn => Vec::new(),
+                GameCommand::ClaimTask { ids } => ids,
+            };
             let url = authenticated(|client, account, _| {
                 client.check_in_url(&account.msisdn, &account.access_token)
             })?;
-            let response = ncell_cli::api::check_in(&url)?;
-            let message = format!(
-                "Check-in successful. Streak: {} days. Weekly points: {}. Game tokens: {}.",
-                response["data"]["current_streak"],
-                response["data"]["weekly_points"],
-                response["data"]["game_tokens"]
-            );
-            output(args.json, response, message);
+            let response = ncell_cli::api::check_in(&url, &id)?;
+            if id.is_empty() {
+                let message = format!(
+                    "Check-in successful. Streak: {} days. Weekly points: {}. Game tokens: {}.",
+                    response["data"]["current_streak"],
+                    response["data"]["weekly_points"],
+                    response["data"]["game_tokens"]
+                );
+                output(args.json, response, message);
+            } else {
+                let results = response.as_array().unwrap();
+                let failed = results
+                    .iter()
+                    .any(|item| item["response"]["success"] != true);
+                if !args.json {
+                    for item in results {
+                        let data = &item["response"];
+                        if data["success"] == true {
+                            println!(
+                                "Task {} claimed. Tokens awarded: {}. Game tokens: {}. Weekly points: {}.",
+                                item["id"],
+                                data["points_awarded"],
+                                data["new_token_balance"],
+                                data["new_week_points"]
+                            );
+                        } else {
+                            println!(
+                                "Task {}: {}",
+                                item["id"],
+                                data["message"]
+                                    .as_str()
+                                    .or_else(|| data["error"].as_str())
+                                    .unwrap_or("Claim failed")
+                            );
+                        }
+                    }
+                }
+                if failed {
+                    return Err(Error::GameTasks {
+                        response: Box::new(response),
+                    });
+                }
+                if args.json {
+                    println!("{response:#}");
+                }
+            }
         }
         Command::SendFreeSms { number, text } => {
             let response = authenticated(|client, account, _| {
@@ -215,34 +254,31 @@ pub fn run(args: Args) -> Result<()> {
                 "Local session removed.",
             );
         }
-        command @ (Command::Balance | Command::Profile | Command::Plans { .. }) => {
+        command @ (Command::Balance
+        | Command::Profile
+        | Command::Plans { .. }
+        | Command::Search { .. }
+        | Command::Categories) => {
             let profile = matches!(command, Command::Profile);
-            let plans = matches!(command, Command::Plans { .. });
-            let list_categories = matches!(
-                command,
-                Command::Plans {
-                    list_categories: true,
-                    ..
-                }
-            );
+            let plans = matches!(command, Command::Plans { .. } | Command::Search { .. });
+            let list_categories = matches!(command, Command::Categories);
             let (mut data, number) = authenticated(|client, account, _| {
                 let data = if list_categories {
                     client.categories(&account.msisdn, &account.access_token)?
-                } else if let Command::Plans {
-                    category,
-                    ref search,
-                    ..
-                } = command
-                {
-                    if search.as_ref().is_some_and(|s| s.trim().is_empty()) {
-                        return Err(Error::InvalidInput("Search text cannot be empty"));
-                    }
-                    client.search_plans(
-                        &account.msisdn,
-                        &account.access_token,
-                        category,
-                        search.as_deref().unwrap_or(""),
-                    )?
+                } else if plans {
+                    let (category, search) = match &command {
+                        Command::Plans { category, .. } => (*category, ""),
+                        Command::Search {
+                            category, keyword, ..
+                        } => {
+                            if keyword.trim().is_empty() {
+                                return Err(Error::InvalidInput("Search text cannot be empty"));
+                            }
+                            (*category, keyword.as_str())
+                        }
+                        _ => unreachable!(),
+                    };
+                    client.search_plans(&account.msisdn, &account.access_token, category, search)?
                 } else if profile {
                     client.profile(&account.msisdn, &account.access_token)?
                 } else {
@@ -250,12 +286,7 @@ pub fn run(args: Args) -> Result<()> {
                 };
                 Ok((data, account.msisdn.clone()))
             })?;
-            if let Command::Plans {
-                sort,
-                list_categories: false,
-                ..
-            } = command
-            {
+            if let Command::Plans { sort, .. } | Command::Search { sort, .. } = command {
                 let packages = data["availablePackages"]
                     .as_array_mut()
                     .ok_or(Error::InvalidResponse)?;
@@ -367,7 +398,6 @@ pub fn run(args: Args) -> Result<()> {
                 }
             }
         }
-        Command::Search { .. } => unreachable!(),
     }
     Ok(())
 }
@@ -425,6 +455,34 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn game_arguments_require_one_action_and_task_ids() {
+        let args = Args::try_parse_from(["ncell", "game", "claim-task", "1,2,3"]).unwrap();
+        assert!(
+            matches!(args.command, Command::Game { action: GameCommand::ClaimTask { ids } } if ids == [1, 2, 3])
+        );
+        assert!(Args::try_parse_from(["ncell", "game", "check-in"]).is_ok());
+        for flags in [
+            vec![],
+            vec!["claim-task"],
+            vec!["--check-in"],
+            vec!["claim-task", "0"],
+            vec!["claim-task", "1,,2"],
+        ] {
+            assert!(Args::try_parse_from(["ncell", "game"].into_iter().chain(flags)).is_err());
+        }
+        for args in [
+            vec!["ncell", "check-in"],
+            vec!["ncell", "plans", "--list-categories"],
+            vec!["ncell", "plans", "--search", "SMS"],
+            vec!["ncell", "subscribe", "--id", "984"],
+            vec!["ncell", "-h"],
+            vec!["ncell", "-V"],
+        ] {
+            assert!(Args::try_parse_from(args).is_err());
+        }
+    }
+
+    #[test]
     fn profile_status_labels_match_captures_and_preserve_unknown_codes() {
         assert_eq!(profile_status("B01"), "Active (B01)");
         assert_eq!(profile_status("B03"), "All Services Blocked (B03)");
@@ -443,11 +501,13 @@ mod tests {
             vec!["balance"],
             vec!["profile"],
             vec!["search", "Super", "--category", "66"],
-            vec!["plans", "--search", "Super"],
+            vec!["plans"],
             vec!["send-free-sms", "9812345678", "Hello"],
-            vec!["plans", "--list-categories"],
-            vec!["subscribe", "--id", "1225"],
+            vec!["categories"],
+            vec!["subscribe", "1225"],
             vec!["refresh"],
+            vec!["game", "check-in"],
+            vec!["game", "claim-task", "1,2,3"],
         ] {
             let args =
                 Args::try_parse_from(std::iter::once("ncell").chain(command).chain(["--json"]))

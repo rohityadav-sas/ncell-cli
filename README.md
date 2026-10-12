@@ -10,6 +10,21 @@
 
 </div>
 
+## Commands
+
+```sh
+ncell login 98XXXXXXXX
+ncell balance
+ncell categories
+ncell plans --category 50
+ncell subscribe 984 --category 50
+ncell game check-in
+ncell game claim-task 1,2,3
+ncell --help
+```
+
+Actions and required inputs are plain words; options use `--long-name` (no short flags). Add `--json` for JSON output.
+
 ## Example
 
 ```sh

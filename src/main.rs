@@ -15,7 +15,8 @@ fn main() -> std::process::ExitCode {
         Err(error) => {
             if json {
                 if let ncell_cli::error::Error::Api { response, .. }
-                | ncell_cli::error::Error::CheckIn { response, .. } = &error
+                | ncell_cli::error::Error::CheckIn { response, .. }
+                | ncell_cli::error::Error::GameTasks { response } = &error
                 {
                     println!("{response:#}");
                 } else {

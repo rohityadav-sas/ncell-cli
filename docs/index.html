@@ -422,7 +422,7 @@ ncell profile
 
             <h2 id="plans">Plans and categories</h2>
             <pre data-lang="Shell"><code>ncell plans
-ncell plans --list-categories
+ncell categories
 ncell plans --category 50
 ncell plans --category 61
 ncell plans --category 66 --json</code></pre>
@@ -454,7 +454,7 @@ ncell plans --category 66 --json</code></pre>
             <h2 id="searching">Search and sorting</h2>
             <pre data-lang="Shell"><code>ncell search "SMS" --category 50
 ncell search "Super" --sort price
-ncell plans --search "Combo" --sort validity:desc,price:asc</code></pre>
+ncell search "Combo" --sort validity:desc,price:asc</code></pre>
 
             <h3 id="searching-sort">Sort by more than one field</h3>
             <pre data-lang="Shell"><code>ncell search "SMS" --category 50 --sort validity:desc,price:asc
@@ -468,7 +468,7 @@ ncell plans --sort validity,price</code></pre>
 
             <h2 id="subscribe">Subscribe to a plan</h2>
             <pre data-lang="Shell"><code>ncell plans --category 50
-ncell subscribe --category 50 --id 984</code></pre>
+ncell subscribe 984 --category 50</code></pre>
             <p>
                 Use the category ID from the category list. <code>--id</code> is required;
                 <code>--category</code> defaults to 66.
@@ -501,6 +501,20 @@ ncell subscribe --category 50 --id 984</code></pre>
 
 
             <h2 id="commands">Command reference</h2>
+            <p>Use plain words for actions and required inputs, and <code>--long-name</code> for options.
+                Commands and options use lowercase kebab-case. Short flags such as <code>-h</code> are not supported.
+                Quote inputs containing spaces. Use <code>--</code> before a positional value beginning with a dash.
+                Options such as <code>--category 50</code> also accept <code>--category=50</code>.</p>
+            <p><code>--verify</code> resumes a pending login; <code>--category</code> selects a catalog (default 66);
+                <code>--sort</code> changes ordering (default price ascending). Sort keys accept commas or repeated
+                <code>--sort</code> options, with optional <code>:asc</code> or <code>:desc</code>.</p>
+            <h3>Game rewards</h3>
+            <pre data-lang="Shell"><code>ncell game check-in
+ncell game claim-task 1,2,3
+ncell game claim-task 1 2 3 --json</code></pre>
+            <p>Task claims run sequentially using one web session. A server rejection is reported per task while
+                remaining tasks continue; network or invalid-response errors stop the batch. JSON task output is
+                an array containing each task ID and its server response. The command exits unsuccessfully if any task fails.</p>
             <div class="table-wrap">
                 <table>
                     <thead>
@@ -533,11 +547,20 @@ ncell subscribe --category 50 --id 984</code></pre>
                         <tr>
                             <td><code>plans</code></td>
                             <td>
-                                <code>[--category &lt;id&gt;] [--search
-                                        &lt;text&gt;] [--sort
-                                        &lt;keys&gt;]</code>
-                                or <code>--list-categories</code>
+                                <code>[--category &lt;id&gt;] [--sort &lt;keys&gt;]</code>
                             </td>
+                        </tr>
+                        <tr>
+                            <td><code>categories</code></td>
+                            <td>List catalog categories</td>
+                        </tr>
+                        <tr>
+                            <td><code>game check-in</code></td>
+                            <td>Claim the daily reward</td>
+                        </tr>
+                        <tr>
+                            <td><code>game claim-task</code></td>
+                            <td><code>&lt;ids&gt;</code> — comma-separated or space-separated task IDs</td>
                         </tr>
                         <tr>
                             <td><code>search</code></td>
@@ -549,8 +572,7 @@ ncell subscribe --category 50 --id 984</code></pre>
                         <tr>
                             <td><code>subscribe</code></td>
                             <td>
-                                <code>--id &lt;plan-id&gt; [--category
-                                        &lt;id&gt;]</code>
+                                <code>&lt;plan-id&gt; [--category &lt;id&gt;]</code>
                             </td>
                         </tr>
                         <tr>
@@ -567,10 +589,11 @@ ncell subscribe --category 50 --id 984</code></pre>
                 </table>
             </div>
             <p>
-                Global commands:
+                Global options:
             <ul>
                 <li><code>--json</code> outputs the complete JSON response</li>
                 <li><code>--help</code> shows help information</li>
+                <li><code>ncell --version</code> shows the CLI version</li>
                 <li><code>&lt;command&gt; --help</code> shows usage for a specific command</li>
             </ul>
             </p>

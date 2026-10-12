@@ -4,7 +4,7 @@ use scraper::{Html, Selector};
 use serde_json::Value;
 use std::time::Duration;
 
-pub fn check_in(url: &str) -> Result<Value> {
+pub fn check_in(url: &str, activities: &[u64]) -> Result<Value> {
     let web = Client::builder()
         .cookie_store(true)
         .redirect(reqwest::redirect::Policy::none())
@@ -14,11 +14,12 @@ pub fn check_in(url: &str) -> Result<Value> {
     submit(
         &web,
         url,
-        "https://sajeeb.com.np/ncellapp/checkin/api/checkin.php",
+        activities,
+        "https://sajeeb.com.np/ncellapp/checkin/api",
     )
 }
 
-fn submit(web: &Client, url: &str, endpoint: &str) -> Result<Value> {
+fn submit(web: &Client, url: &str, activities: &[u64], base: &str) -> Result<Value> {
     let page = web.get(url).send().map_err(Error::from_http)?;
     if !page.status().is_success() {
         return Err(Error::CheckIn {
@@ -38,9 +39,34 @@ fn submit(web: &Client, url: &str, endpoint: &str) -> Result<Value> {
         .ok_or(Error::InvalidInput(
             "Check-in page did not provide a CSRF token",
         ))?;
+    if activities.is_empty() {
+        claim(web, &format!("{base}/checkin.php"), csrf, None)
+    } else {
+        let results = activities
+            .iter()
+            .map(|&id| {
+                let response = claim(web, &format!("{base}/record_activity.php"), csrf, Some(id));
+                match response {
+                    Ok(response) => Ok(serde_json::json!({"id": id, "response": response})),
+                    Err(Error::CheckIn { response, .. }) => {
+                        Ok(serde_json::json!({"id": id, "response": response}))
+                    }
+                    Err(error) => Err(error),
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Value::Array(results))
+    }
+}
+
+fn claim(web: &Client, endpoint: &str, csrf: &str, activity: Option<u64>) -> Result<Value> {
+    let mut form = Form::new().text("csrf_token", csrf.to_owned());
+    if let Some(id) = activity {
+        form = form.text("activity_id", id.to_string());
+    }
     let response = web
         .post(endpoint)
-        .multipart(Form::new().text("csrf_token", csrf.to_owned()))
+        .multipart(form)
         .send()
         .map_err(Error::from_http)?;
     let status = response.status();
@@ -49,6 +75,7 @@ fn submit(web: &Client, url: &str, endpoint: &str) -> Result<Value> {
         return Err(Error::CheckIn {
             message: data["message"]
                 .as_str()
+                .or_else(|| data["error"].as_str())
                 .unwrap_or("Check-in failed")
                 .to_owned(),
             status: status.as_u16(),
@@ -61,6 +88,35 @@ fn submit(web: &Client, url: &str, endpoint: &str) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn activity_sends_id_and_fresh_csrf_once() {
+        let mut server = mockito::Server::new();
+        let page = server
+            .mock("GET", "/earnmore.php")
+            .with_header("set-cookie", "PHPSESSID=activity-session; Path=/")
+            .with_body("<input name='csrf_token' value='activity-token'>")
+            .create();
+        let claim = server.mock("POST", "/api/record_activity.php")
+            .match_header("cookie", "PHPSESSID=activity-session")
+            .match_body(mockito::Matcher::AllOf(vec![
+                mockito::Matcher::Regex("(?s)name=\"activity_id\"\\r\\n\\r\\n[12]\\r\\n".into()),
+                mockito::Matcher::Regex("(?s)name=\"csrf_token\"\\r\\n\\r\\nactivity-token\\r\\n".into()),
+            ]))
+            .with_body(r#"{"success":true,"points_awarded":25,"new_token_balance":130,"new_week_points":6565}"#)
+            .expect(2).create();
+        let web = Client::builder().cookie_store(true).build().unwrap();
+        let result = submit(
+            &web,
+            &format!("{}/earnmore.php", server.url()),
+            &[1, 2],
+            &format!("{}/api", server.url()),
+        )
+        .unwrap();
+        assert_eq!(result[0]["response"]["points_awarded"], 25);
+        page.assert();
+        claim.assert();
+    }
 
     #[test]
     fn check_in_uses_fresh_csrf_cookie_and_preserves_rejection_without_retry() {
@@ -84,7 +140,8 @@ mod tests {
         let error = submit(
             &web,
             &format!("{}/index.php", server.url()),
-            &format!("{}/api/checkin.php", server.url()),
+            &[],
+            &format!("{}/api", server.url()),
         )
         .unwrap_err();
         match error {
