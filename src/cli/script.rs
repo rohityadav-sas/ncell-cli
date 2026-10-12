@@ -25,7 +25,7 @@ pub(super) fn emit_json(result: Value) {
     });
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 pub(super) enum ScriptCommand {
     /// Save an example in the CLI library and open it in your editor.
     Create { file: PathBuf },
@@ -71,7 +71,7 @@ ncell game ranks
 struct Step {
     line: usize,
     command: String,
-    words: Vec<String>,
+    args: Args,
 }
 fn fail(message: impl std::fmt::Display) -> Error {
     Error::Script(message.to_string())
@@ -240,7 +240,7 @@ fn parse(source: &str) -> Result<Vec<Step>> {
         steps.push(Step {
             line: index + 1,
             command: line.to_owned(),
-            words,
+            args,
         });
     }
     Ok(steps)
@@ -283,7 +283,11 @@ fn execute(
     }
     Ok(())
 }
-pub(super) fn run(action: ScriptCommand, json_output: bool) -> Result<()> {
+pub(super) fn run(
+    action: ScriptCommand,
+    json_output: bool,
+    runtime: &mut super::Runtime,
+) -> Result<()> {
     match action {
         ScriptCommand::List => {
             let directory = script_directory()?;
@@ -374,15 +378,12 @@ pub(super) fn run(action: ScriptCommand, json_output: bool) -> Result<()> {
                 .map_err(|e| fail(format!("Could not read {}: {e}", file.display())))?;
             let steps = parse(&source).map_err(|e| fail(format!("{}: {e}", file.display())))?;
             execute(&steps, json_output, |step, json_output, index, total| {
-                let mut args = Args::try_parse_from(
-                    std::iter::once("ncell".to_owned()).chain(step.words.clone()),
-                )
-                .map_err(fail)?;
+                let mut args = step.args.clone();
                 args.json |= json_output;
                 CONTEXT.with(|context| *context.borrow_mut() = json_output.then(|| json!({
                     "event":"result", "step":index, "total":total, "line":step.line, "command":step.command
                 })));
-                let result = super::run(args);
+                let result = super::run_with(args, runtime);
                 CONTEXT.with(|context| *context.borrow_mut() = None);
                 result
             }).map_err(|e| fail(format!("{}: {e}", file.display())))
@@ -422,7 +423,9 @@ mod tests {
         let source = "# comment\n\nlogin 9812345678 --verify\naccount list\nstatus\nlogout\nbalance\nprofile\nplans\nplans categories\nplans search \"SMS pack\"\nplans subscribe 123\nsms send-free 9812345678 \"hello $HOME | literal\"\nrefresh\ngame status\ngame spin --count all\ngame claim-task all\n";
         let steps = parse(source).unwrap();
         assert_eq!(steps.len(), 15);
-        assert_eq!(steps[10].words.last().unwrap(), "hello $HOME | literal");
+        assert!(
+            matches!(&steps[10].args.command, Command::Sms { action: super::super::SmsCommand::SendFree { text, .. } } if text == "hello $HOME | literal")
+        );
         assert_eq!(
             words("sms send-free 9812345678 'C:\\my files\\hi'").unwrap()[3],
             "C:\\my files\\hi"
@@ -484,9 +487,7 @@ mod tests {
         let mut calls = 0;
         let result = execute(&steps, true, |step, _, _, _| {
             calls += 1;
-            let args =
-                Args::try_parse_from(std::iter::once("ncell".to_owned()).chain(step.words.clone()))
-                    .unwrap();
+            let args = step.args.clone();
             match args.command {
                 Command::Sms {
                     action: super::super::SmsCommand::SendFree { number, text },

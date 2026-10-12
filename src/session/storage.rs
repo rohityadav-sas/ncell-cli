@@ -111,9 +111,16 @@ impl SessionStore for KeyringStore {
         for saved in &session.other_accounts {
             let entry = self.account_entry(&saved.account.msisdn)?;
             let encoded = serde_json::to_string(saved).map_err(|_| Error::InvalidSession)?;
-            entry.set_password(&encoded).map_err(|_| Error::Storage)?;
-            if entry.get_password().map_err(|_| Error::Storage)? != encoded {
-                return Err(Error::Storage);
+            let unchanged = match entry.get_password() {
+                Ok(current) => current == encoded,
+                Err(keyring::Error::NoEntry) => false,
+                Err(_) => return Err(Error::Storage),
+            };
+            if !unchanged {
+                entry.set_password(&encoded).map_err(|_| Error::Storage)?;
+                if entry.get_password().map_err(|_| Error::Storage)? != encoded {
+                    return Err(Error::Storage);
+                }
             }
             numbers.push(saved.account.msisdn.clone());
         }
@@ -121,11 +128,13 @@ impl SessionStore for KeyringStore {
         value["saved_accounts"] = serde_json::json!(numbers);
         value["storage_version"] = serde_json::json!(3);
         let encoded = value.to_string();
-        self.entry
-            .set_password(&encoded)
-            .map_err(|_| Error::Storage)?;
-        if self.entry.get_password().map_err(|_| Error::Storage)? != encoded {
-            return Err(Error::Storage);
+        if previous.as_ref() != Some(&value) {
+            self.entry
+                .set_password(&encoded)
+                .map_err(|_| Error::Storage)?;
+            if self.entry.get_password().map_err(|_| Error::Storage)? != encoded {
+                return Err(Error::Storage);
+            }
         }
         for old in previous
             .as_ref()
@@ -161,6 +170,35 @@ impl SessionStore for KeyringStore {
 #[cfg(all(test, target_os = "windows"))]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "Uses isolated native credential entries"]
+    fn unchanged_saves_preserve_accounts_and_missing_entries_are_repaired() {
+        let service = format!("ncell-cli-test-{}", uuid::Uuid::new_v4());
+        let store = KeyringStore::with_service(&service).unwrap();
+        let mut session = Session {
+            device_id: "device".into(),
+            ..Session::default()
+        };
+        for number in ["9811111111", "9822222222"] {
+            session.set_account(
+                serde_json::from_value(serde_json::json!({
+                    "msisdn":number, "access_token":"access", "refresh_token":"refresh",
+                    "authenticated_at":"2026-10-12T00:00:00Z"
+                }))
+                .unwrap(),
+            );
+        }
+        store.save(&session).unwrap();
+        store.save(&session).unwrap();
+        let inactive = store.account_entry("9811111111").unwrap();
+        inactive.delete_credential().unwrap();
+        store.save(&session).unwrap();
+        let loaded = store.load().unwrap().unwrap();
+        assert_eq!(loaded.account.unwrap().msisdn, "9822222222");
+        assert_eq!(loaded.other_accounts[0].account.msisdn, "9811111111");
+        store.clear().unwrap();
+    }
 
     #[test]
     #[ignore = "Uses isolated native credential entries"]

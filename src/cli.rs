@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use std::io::{self, IsTerminal, Write};
 use std::time::{Duration, Instant};
 
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 #[command(
     name = "ncell-cli",
     bin_name = "ncell",
@@ -34,7 +34,7 @@ pub struct Args {
     command: Command,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 enum Command {
     /// Create, manage and run saved command scripts.
     Script {
@@ -82,7 +82,7 @@ enum Command {
     Refresh,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 enum AccountCommand {
     /// Save an account without switching. Use --verify to resume its pending login.
     Add {
@@ -98,7 +98,7 @@ enum AccountCommand {
     Switch { number: String },
 }
 
-#[derive(clap::Args)]
+#[derive(clap::Args, Clone)]
 struct PlanOptions {
     #[arg(long, default_value_t = 66)]
     category: u64,
@@ -107,7 +107,7 @@ struct PlanOptions {
     sort: Vec<(Sort, bool)>,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 enum PlanCommand {
     /// List catalog categories.
     Categories,
@@ -125,13 +125,13 @@ enum PlanCommand {
     },
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 enum SmsCommand {
     /// Send a free SMS to a Nepal mobile number.
     SendFree { number: String, text: String },
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 enum GameCommand {
     /// Spin the wheel. Each spin costs game tokens; stops on the first failure.
     Spin(GamePlayOptions),
@@ -152,7 +152,7 @@ enum GameCommand {
     },
 }
 
-#[derive(clap::Args)]
+#[derive(clap::Args, Clone)]
 struct GamePlayOptions {
     /// Number of games to play, or all until tokens are insufficient.
     #[arg(long, default_value = "1", value_parser = parse_count)]
@@ -249,21 +249,82 @@ fn parse_delay(value: &str) -> std::result::Result<Duration, String> {
         .ok_or_else(|| "Delay must be a nonnegative duration: 1.5, 1.5s, 2m, or 1.5h".into())
 }
 
+#[derive(Default)]
+struct Runtime {
+    client: Option<Client>,
+    game: Option<(String, Instant, ncell_cli::api::GameSession)>,
+}
+impl Runtime {
+    fn client(&mut self) -> Result<Client> {
+        if self.client.is_none() {
+            self.client = Some(Client::new()?);
+        }
+        Ok(self.client.as_ref().unwrap().clone())
+    }
+    fn game(&mut self) -> Result<&mut ncell_cli::api::GameSession> {
+        let client = self.client()?;
+        let session = KeyringStore::new()?.load()?.ok_or(Error::NotLoggedIn)?;
+        let account = session.account.as_ref().ok_or(Error::NotLoggedIn)?;
+        let identity = format!(
+            "{}:{}:{}",
+            account.msisdn, session.device_id, account.access_token
+        );
+        self.cached_game(identity, || {
+            let (url, identity) = AuthService::new(client, KeyringStore::new()?).authenticated(
+                |client, account, device| {
+                    Ok((
+                        client.check_in_url(&account.msisdn, &account.access_token)?,
+                        format!("{}:{}:{}", account.msisdn, device, account.access_token),
+                    ))
+                },
+            )?;
+            Ok((identity, ncell_cli::api::GameSession::open(&url)?))
+        })
+    }
+    fn cached_game(
+        &mut self,
+        identity: String,
+        create: impl FnOnce() -> Result<(String, ncell_cli::api::GameSession)>,
+    ) -> Result<&mut ncell_cli::api::GameSession> {
+        if self.game.as_ref().is_none_or(|(key, created, game)| {
+            key != &identity
+                || created.elapsed() >= Duration::from_secs(600)
+                || game.tokens.is_none()
+        }) {
+            let (identity, session) = create()?;
+            self.game = Some((identity, Instant::now(), session));
+        }
+        Ok(&mut self.game.as_mut().unwrap().2)
+    }
+}
 pub fn run(args: Args) -> Result<()> {
+    run_with(args, &mut Runtime::default())
+}
+fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
     validate_args(&args).map_err(Error::Script)?;
+    if matches!(
+        &args.command,
+        Command::Login { .. }
+            | Command::Logout
+            | Command::Refresh
+            | Command::Account {
+                action: AccountCommand::Add { .. }
+                    | AccountCommand::Remove { .. }
+                    | AccountCommand::Switch { .. }
+            }
+    ) {
+        runtime.game = None;
+    }
     match args.command {
-        Command::Script { action } => return script::run(action, args.json),
+        Command::Script { action } => return script::run(action, args.json, runtime),
         Command::Game { action } => {
-            let url = authenticated(|client, account, _| {
-                client.check_in_url(&account.msisdn, &account.access_token)
-            })?;
+            let game = runtime.game()?;
             let scratch = matches!(action, GameCommand::Scratch(_));
             let math = matches!(action, GameCommand::Math(_));
             let id = match action {
                 GameCommand::Spin(GamePlayOptions { count, delay })
                 | GameCommand::Scratch(GamePlayOptions { count, delay })
                 | GameCommand::Math(GamePlayOptions { count, delay }) => {
-                    let game = ncell_cli::api::GameSession::new(&url)?;
                     let all = count == "all";
                     let count = if all {
                         0
@@ -365,6 +426,7 @@ pub fn run(args: Args) -> Result<()> {
                             };
                             // bg_reward is not a token refund; only deduct the entry fee.
                             balance = balance.map(|tokens| tokens.saturating_sub(cost));
+                            game.tokens = balance;
                             let (won, message) = math_summary(&response);
                             output(args.json, response, message);
                             io::stdout().flush().map_err(|_| Error::InvalidResponse)?;
@@ -392,6 +454,7 @@ pub fn run(args: Args) -> Result<()> {
                             "new_token_balance"
                         };
                         balance = response[tokens].as_u64();
+                        game.tokens = balance;
                         let message = format!(
                             "{:<12}  {:<20}  {:>8}  {:>12}",
                             format!("{label} {}", index + 1),
@@ -405,18 +468,18 @@ pub fn run(args: Args) -> Result<()> {
                     return Ok(());
                 }
                 GameCommand::Ranks => {
-                    let response = ncell_cli::api::game_ranks(&url)?;
+                    let response = game.ranks()?;
                     if args.json {
-                        script::emit_json(response.clone());
+                        script::emit_json(response);
                     } else {
                         print_ranks(&response);
                     }
                     return Ok(());
                 }
                 GameCommand::Status => {
-                    let response = ncell_cli::api::game_tasks(&url)?;
+                    let response = game.tasks()?;
                     if args.json {
-                        script::emit_json(response.clone());
+                        script::emit_json(response);
                     } else {
                         print_tasks(&response)?;
                     }
@@ -425,7 +488,7 @@ pub fn run(args: Args) -> Result<()> {
                 GameCommand::CheckIn => Vec::new(),
                 GameCommand::ClaimTask { ids } => {
                     if ids == ["all"] {
-                        let ids = claimable_ids(&ncell_cli::api::game_tasks(&url)?)?;
+                        let ids = claimable_ids(&game.tasks()?)?;
                         if ids.is_empty() {
                             output(
                                 args.json,
@@ -440,7 +503,7 @@ pub fn run(args: Args) -> Result<()> {
                     }
                 }
             };
-            let response = ncell_cli::api::check_in(&url, &id, |item| {
+            let response = game.claim(&id, |item| {
                 if !args.json {
                     print_task(item);
                 }
@@ -471,14 +534,14 @@ pub fn run(args: Args) -> Result<()> {
                     });
                 }
                 if args.json {
-                    script::emit_json(response.clone());
+                    script::emit_json(response);
                 }
             }
         }
         Command::Sms {
             action: SmsCommand::SendFree { number, text },
         } => {
-            let response = authenticated(|client, account, _| {
+            let response = authenticated(runtime.client()?, |client, account, _| {
                 client.send_free_sms(&account.msisdn, &account.access_token, &number, &text)
             })?;
             output(
@@ -491,45 +554,52 @@ pub fn run(args: Args) -> Result<()> {
             action: Some(PlanCommand::Subscribe { id, category }),
             ..
         } => {
-            let (response, name) = authenticated(|client, account, device_id| {
-                let catalog = client.plans(&account.msisdn, &account.access_token, category)?;
-                let plan = catalog["availablePackages"]
-                    .as_array()
-                    .ok_or(Error::InvalidResponse)?
-                    .iter()
-                    .find(|p| p["id"].as_str() == Some(&id))
-                    .ok_or(Error::InvalidInput(
-                        "Plan not found in this category. Run plans --category <ID>",
-                    ))?;
-                let response =
-                    client.subscribe(&account.msisdn, &account.access_token, device_id, plan)?;
-                Ok((
-                    response,
-                    text(&plan["displayInfo"]["displayName"]).trim().to_owned(),
-                ))
-            })?;
+            let (response, name) =
+                authenticated(runtime.client()?, |client, account, device_id| {
+                    let catalog = client.plans(&account.msisdn, &account.access_token, category)?;
+                    let plan = catalog["availablePackages"]
+                        .as_array()
+                        .ok_or(Error::InvalidResponse)?
+                        .iter()
+                        .find(|p| p["id"].as_str() == Some(&id))
+                        .ok_or(Error::InvalidInput(
+                            "Plan not found in this category. Run plans --category <ID>",
+                        ))?;
+                    let response = client.subscribe(
+                        &account.msisdn,
+                        &account.access_token,
+                        device_id,
+                        plan,
+                    )?;
+                    Ok((
+                        response,
+                        text(&plan["displayInfo"]["displayName"]).trim().to_owned(),
+                    ))
+                })?;
             if args.json {
-                script::emit_json(response.clone());
+                script::emit_json(response);
             } else {
                 println!("Subscribed to {name}.");
             }
         }
         Command::Refresh => {
-            AuthService::new(Client::new()?, KeyringStore::new()?).refresh()?;
+            AuthService::new(runtime.client()?, KeyringStore::new()?).refresh()?;
             output(
                 args.json,
                 json!({"refreshed": true, "session_saved": true, "mobile_sync_required": true}),
                 "Refreshed tokens saved in your system credential store.\nIf this session is shared with the app, synchronize the rotated tokens back.",
             );
         }
-        Command::Login { number, verify } => login(&number, verify, true, args.json)?,
+        Command::Login { number, verify } => {
+            login(runtime.client()?, &number, verify, true, args.json)?
+        }
         Command::Account { action } => {
             let store = KeyringStore::new()?;
             let mut session = store.load()?.unwrap_or_default();
             match action {
                 AccountCommand::Add { number, verify } => {
                     drop(store);
-                    login(&number, verify, false, args.json)?;
+                    login(runtime.client()?, &number, verify, false, args.json)?;
                 }
                 AccountCommand::Remove { number } => {
                     let number = normalize_number(&number)?;
@@ -640,7 +710,7 @@ pub fn run(args: Args) -> Result<()> {
                 Command::Plans { options, .. } => (Some(options), ""),
                 _ => (None, ""),
             };
-            let (mut data, number) = authenticated(|client, account, _| {
+            let (mut data, number) = authenticated(runtime.client()?, |client, account, _| {
                 let data = if list_categories {
                     client.categories(&account.msisdn, &account.access_token)?
                 } else if plans {
@@ -684,7 +754,7 @@ pub fn run(args: Args) -> Result<()> {
                 });
             }
             if args.json {
-                script::emit_json(data.clone());
+                script::emit_json(data);
             } else if list_categories {
                 println!("{:<6}  {:<22}  Type", "ID", "Category");
                 println!("{}", "-".repeat(58));
@@ -771,8 +841,8 @@ pub fn run(args: Args) -> Result<()> {
     Ok(())
 }
 
-fn login(number: &str, verify: bool, activate: bool, json: bool) -> Result<()> {
-    let auth = AuthService::new(Client::new()?, KeyringStore::new()?);
+fn login(client: Client, number: &str, verify: bool, activate: bool, json: bool) -> Result<()> {
+    let auth = AuthService::new(client, KeyringStore::new()?);
     let command = if activate { "login" } else { "account add" };
     if !verify {
         auth.request_otp(number)?;
@@ -974,8 +1044,11 @@ fn print_balance(data: &Value, _number: &str) {
     }
 }
 
-fn authenticated<T>(request: impl Fn(&Client, &Account, &str) -> Result<T>) -> Result<T> {
-    AuthService::new(Client::new()?, KeyringStore::new()?).authenticated(request)
+fn authenticated<T>(
+    client: Client,
+    request: impl Fn(&Client, &Account, &str) -> Result<T>,
+) -> Result<T> {
+    AuthService::new(client, KeyringStore::new()?).authenticated(request)
 }
 
 fn print_ranks(response: &Value) {
@@ -1125,13 +1198,7 @@ fn print_task(item: &Value) {
 }
 
 fn task_failed(response: &Value) -> bool {
-    response["success"] != true
-        && !["Task already completed today", "Reward already claimed"].contains(
-            &response["error"]
-                .as_str()
-                .or_else(|| response["message"].as_str())
-                .unwrap_or(""),
-        )
+    response["success"] != true && !ncell_cli::api::already_claimed(response)
 }
 
 fn text(value: &Value) -> &str {
@@ -1220,7 +1287,7 @@ fn manual_math_answer(
 
 fn output(json: bool, data: Value, message: impl std::fmt::Display) {
     if json {
-        script::emit_json(data.clone());
+        script::emit_json(data);
     } else {
         println!("{message}");
     }
@@ -1261,6 +1328,86 @@ fn sort_key(plan: &Value, sort: Sort) -> f64 {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn session_cache_reuses_identity_and_rebuilds_for_account_device_token_age_and_unknown_balance()
+    {
+        let mut server = mockito::Server::new();
+        let page = server
+            .mock("GET", "/index")
+            .with_body("<input name='csrf_token' value='csrf'><div id='tokens-display'>100</div>")
+            .expect(6)
+            .create();
+        let mut runtime = Runtime::default();
+        let mut creations = 0;
+        let mut create = |identity: &str| {
+            creations += 1;
+            Ok((
+                identity.to_owned(),
+                ncell_cli::api::GameSession::open(&format!("{}/index", server.url()))?,
+            ))
+        };
+        for identity in [
+            "account-a:device-a:token-a",
+            "account-a:device-a:token-a",
+            "account-b:device-a:token-a",
+            "account-b:device-b:token-a",
+            "account-b:device-b:token-b",
+        ] {
+            runtime
+                .cached_game(identity.into(), || create(identity))
+                .unwrap();
+        }
+        runtime.game.as_mut().unwrap().1 -= Duration::from_secs(601);
+        runtime
+            .cached_game("account-b:device-b:token-b".into(), || {
+                create("account-b:device-b:token-b")
+            })
+            .unwrap();
+        runtime.game.as_mut().unwrap().2.tokens = None;
+        runtime
+            .cached_game("account-b:device-b:token-b".into(), || {
+                create("account-b:device-b:token-b")
+            })
+            .unwrap();
+        assert_eq!(creations, 6);
+        page.assert();
+    }
+
+    #[test]
+    fn refreshed_identity_is_cached_and_bootstrap_errors_are_not_hidden() {
+        let mut server = mockito::Server::new();
+        let page = server
+            .mock("GET", "/index")
+            .with_body("<input name='csrf_token' value='csrf'><div id='tokens-display'>0</div>")
+            .expect(1)
+            .create();
+        let mut runtime = Runtime::default();
+        assert!(matches!(
+            runtime.cached_game("old".into(), || Err(Error::Network)),
+            Err(Error::Network)
+        ));
+        assert!(runtime.game.is_none());
+        runtime
+            .cached_game("old".into(), || {
+                Ok((
+                    "rotated".into(),
+                    ncell_cli::api::GameSession::open(&format!("{}/index", server.url()))?,
+                ))
+            })
+            .unwrap();
+        runtime
+            .cached_game("rotated".into(), || {
+                panic!("Rotated identity must reuse the session")
+            })
+            .unwrap();
+        assert!(matches!(
+            runtime.cached_game("different-account".into(), || Err(Error::Connection)),
+            Err(Error::Connection)
+        ));
+        assert_eq!(runtime.game.as_ref().unwrap().0, "rotated");
+        page.assert();
+    }
 
     #[test]
     fn all_game_progress_uses_affordable_entries_without_cap() {

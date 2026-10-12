@@ -95,6 +95,11 @@ impl Client {
     }
 
     pub fn categories(&self, msisdn: &str, token: &str) -> Result<Value> {
+        if let Some((created, cached)) = self.categories_cache.lock().unwrap().get(msisdn)
+            && created.elapsed() < std::time::Duration::from_secs(600)
+        {
+            return Ok(cached.clone());
+        }
         let header = request_header(msisdn, "N/A");
         let response = self.post(
             "/v1.0/product-catalog/tags",
@@ -104,6 +109,10 @@ impl Client {
         if !response["tags"].is_array() {
             return Err(Error::InvalidResponse);
         }
+        self.categories_cache.lock().unwrap().insert(
+            msisdn.to_owned(),
+            (std::time::Instant::now(), response.clone()),
+        );
         Ok(response)
     }
 
@@ -205,6 +214,61 @@ fn required_text(value: &Value) -> Result<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn expired_catalog_cache_is_refetched() {
+        let mut server = mockito::Server::new();
+        let tags = server
+            .mock("POST", "/v1.0/product-catalog/tags")
+            .with_body(r#"{"responseHeader":{"responseCode":"200"},"tags":[]}"#)
+            .expect(1)
+            .create();
+        let client = Client::with_base_url(&server.url()).unwrap();
+        client.categories_cache.lock().unwrap().insert(
+            "9811111111".into(),
+            (
+                std::time::Instant::now() - std::time::Duration::from_secs(601),
+                json!({"tags":[{"id":999}]}),
+            ),
+        );
+        assert_eq!(
+            client.categories("9811111111", "token").unwrap()["tags"],
+            json!([])
+        );
+        tags.assert();
+    }
+
+    #[test]
+    fn catalog_cache_is_shared_by_client_clones_but_isolated_by_account() {
+        let mut server = mockito::Server::new();
+        let tags = server
+            .mock("POST", "/v1.0/product-catalog/tags")
+            .with_body(r#"{"responseHeader":{"responseCode":"200"},"tags":[]}"#)
+            .expect(2)
+            .create();
+        let client = Client::with_base_url(&server.url()).unwrap();
+        client.categories("9811111111", "token-a").unwrap();
+        client.clone().categories("9811111111", "token-a").unwrap();
+        client.categories("9822222222", "token-b").unwrap();
+        tags.assert();
+    }
+
+    #[test]
+    fn rejected_catalog_responses_are_not_cached() {
+        let mut server = mockito::Server::new();
+        let tags = server
+            .mock("POST", "/v1.0/product-catalog/tags")
+            .with_status(401)
+            .with_body(
+                r#"{"responseHeader":{"responseCode":"401","responseDescDisplay":"LGN2001"}}"#,
+            )
+            .expect(2)
+            .create();
+        let client = Client::with_base_url(&server.url()).unwrap();
+        assert!(client.categories("9811111111", "expired").is_err());
+        assert!(client.categories("9811111111", "expired").is_err());
+        tags.assert();
+    }
 
     #[test]
     fn check_in_preserves_encoded_identity_and_rejects_missing_identity() {

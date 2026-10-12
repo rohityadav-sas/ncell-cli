@@ -58,32 +58,18 @@ fn submit(
     on_task: &mut impl FnMut(&Value),
 ) -> Result<Value> {
     let csrf = csrf(web, url)?;
-    if activities.is_empty() {
-        match claim(web, &format!("{base}/checkin.php"), &csrf, None) {
-            Err(Error::CheckIn { response, .. }) if already_checked_in(&response) => Ok(*response),
-            result => result,
-        }
-    } else {
-        let results = activities
-            .iter()
-            .map(|&id| {
-                let response = claim(web, &format!("{base}/record_activity.php"), &csrf, Some(id));
-                let response = match response {
-                    Ok(response) => response,
-                    Err(Error::CheckIn { response, .. }) => *response,
-                    Err(error) => return Err(error),
-                };
-                let item = serde_json::json!({"id": id, "response": response});
-                on_task(&item);
-                Ok(item)
-            })
-            .collect::<Result<Vec<_>>>()?;
-        Ok(Value::Array(results))
+    GameSession {
+        web: web.clone(),
+        csrf,
+        tokens: None,
     }
+    .claim_at(activities, base, on_task)
 }
 
 pub(super) fn csrf(web: &Client, url: &str) -> Result<String> {
-    Ok(bootstrap(web, url)?.0)
+    let csrf = bootstrap(web, url)?.0;
+    require_csrf(&csrf)?;
+    Ok(csrf)
 }
 
 fn bootstrap(web: &Client, url: &str) -> Result<(String, Option<u64>)> {
@@ -101,22 +87,24 @@ fn bootstrap(web: &Client, url: &str) -> Result<(String, Option<u64>)> {
     }
     let html = page.text().map_err(Error::from_http)?;
     let document = Html::parse_document(&html);
-    let selector = Selector::parse("input[name=csrf_token]").unwrap();
+    static SELECTOR: std::sync::LazyLock<Selector> =
+        std::sync::LazyLock::new(|| Selector::parse("input[name=csrf_token]").unwrap());
+    let selector = &*SELECTOR;
     let csrf = document
-        .select(&selector)
+        .select(selector)
         .next()
         .and_then(|input| input.value().attr("value"))
         .filter(|token| !token.is_empty())
-        .ok_or(Error::InvalidInput(
-            "Check-in page did not provide a CSRF token",
-        ))
-        .map(str::to_owned)?;
+        .unwrap_or_default()
+        .to_owned();
     Ok((csrf, token_balance(&document)))
 }
 
 fn token_balance(document: &Html) -> Option<u64> {
+    static SELECTOR: std::sync::LazyLock<Selector> =
+        std::sync::LazyLock::new(|| Selector::parse("#tokens-display").unwrap());
     document
-        .select(&Selector::parse("#tokens-display").unwrap())
+        .select(&SELECTOR)
         .next()?
         .text()
         .collect::<String>()
@@ -133,11 +121,81 @@ pub struct GameSession {
 }
 impl GameSession {
     pub fn new(url: &str) -> Result<Self> {
+        let game = Self::open(url)?;
+        require_csrf(&game.csrf)?;
+        Ok(game)
+    }
+    /// Open a session for status or rankings; read-only requests do not require CSRF.
+    pub fn open(url: &str) -> Result<Self> {
         let web = web_client()?;
         let (csrf, tokens) = bootstrap(&web, url)?;
         Ok(Self { web, csrf, tokens })
     }
+    pub fn tasks(&self) -> Result<Value> {
+        self.tasks_at("https://sajeeb.com.np/ncellapp/checkin/api/challenge_status.php")
+    }
+    fn tasks_at(&self, endpoint: &str) -> Result<Value> {
+        decode(
+            self.web
+                .get(endpoint)
+                .header("User-Agent", WEB_UA)
+                .send()
+                .map_err(Error::from_http)?,
+            false,
+        )
+    }
+    pub fn ranks(&self) -> Result<Value> {
+        super::game_ranks::fetch(&self.web)
+    }
+    pub fn claim(&mut self, activities: &[u64], mut on_task: impl FnMut(&Value)) -> Result<Value> {
+        require_csrf(&self.csrf)?;
+        self.claim_at(
+            activities,
+            "https://sajeeb.com.np/ncellapp/checkin/api",
+            &mut on_task,
+        )
+    }
+    fn claim_at(
+        &mut self,
+        activities: &[u64],
+        base: &str,
+        on_task: &mut impl FnMut(&Value),
+    ) -> Result<Value> {
+        if activities.is_empty() {
+            let result = match claim(&self.web, &format!("{base}/checkin.php"), &self.csrf, None) {
+                Err(Error::CheckIn { response, .. }) if already_checked_in(&response) => {
+                    Ok(*response)
+                }
+                result => result,
+            }?;
+            if !already_checked_in(&result) {
+                self.tokens = result["data"]["game_tokens"].as_u64();
+            }
+            return Ok(result);
+        }
+        let mut results = Vec::with_capacity(activities.len());
+        for &id in activities {
+            let response = match claim(
+                &self.web,
+                &format!("{base}/record_activity.php"),
+                &self.csrf,
+                Some(id),
+            ) {
+                Ok(response) => response,
+                Err(Error::CheckIn { response, .. }) => *response,
+                Err(error) => return Err(error),
+            };
+            if !already_claimed(&response) {
+                self.tokens = response["new_token_balance"].as_u64();
+            }
+            let item = serde_json::json!({"id":id,"response":response});
+            on_task(&item);
+            results.push(item);
+        }
+        Ok(results.into())
+    }
     pub fn spin(&self) -> Result<Value> {
+        require_csrf(&self.csrf)?;
         self.spin_at("https://sajeeb.com.np/ncellapp/checkin/fetchSpinReward.php")
     }
     fn spin_at(&self, endpoint: &str) -> Result<Value> {
@@ -151,14 +209,28 @@ impl GameSession {
         )
     }
     pub fn scratch(&self) -> Result<Value> {
+        require_csrf(&self.csrf)?;
+        self.scratch_at("https://sajeeb.com.np/ncellapp/checkin/fetchScratchReward.php")
+    }
+    fn scratch_at(&self, endpoint: &str) -> Result<Value> {
         decode(
             self.web
-                .post("https://sajeeb.com.np/ncellapp/checkin/fetchScratchReward.php")
+                .post(endpoint)
                 .form(&[("csrf_token", &self.csrf)])
                 .send()
                 .map_err(Error::from_http)?,
             true,
         )
+    }
+}
+
+pub(super) fn require_csrf(csrf: &str) -> Result<()> {
+    if csrf.is_empty() {
+        Err(Error::InvalidInput(
+            "Check-in page did not provide a CSRF token",
+        ))
+    } else {
+        Ok(())
     }
 }
 
@@ -174,6 +246,15 @@ fn claim(web: &Client, endpoint: &str, csrf: &str, activity: Option<u64>) -> Res
         .send()
         .map_err(Error::from_http)?;
     decode(response, false)
+}
+
+pub fn already_claimed(data: &Value) -> bool {
+    ["Task already completed today", "Reward already claimed"].contains(
+        &data["error"]
+            .as_str()
+            .or_else(|| data["message"].as_str())
+            .unwrap_or(""),
+    )
 }
 
 pub fn already_checked_in(data: &Value) -> bool {
@@ -214,6 +295,160 @@ fn decode(response: reqwest::blocking::Response, reward: bool) -> Result<Value> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scratch_reuses_cookie_and_sends_only_csrf_without_retrying_errors() {
+        let mut server = mockito::Server::new();
+        let page = server
+            .mock("GET", "/index")
+            .with_header("set-cookie", "PHPSESSID=scratch; Path=/")
+            .with_body("<input name='csrf_token' value='csrf'><div id='tokens-display'>100</div>")
+            .expect(1)
+            .create();
+        let game = GameSession::new(&format!("{}/index", server.url())).unwrap();
+        for (body, valid) in [
+            (
+                r#"{"value":"50","points_remaining":75,"new_week_points":100}"#,
+                true,
+            ),
+            (r#"{"success":false,"error":"Insufficient tokens"}"#, false),
+            (r#"{"success":true}"#, false),
+        ] {
+            let reward = server
+                .mock("POST", "/scratch")
+                .match_header("cookie", "PHPSESSID=scratch")
+                .match_header("user-agent", mockito::Matcher::Missing)
+                .match_header("origin", mockito::Matcher::Missing)
+                .match_header("referer", mockito::Matcher::Missing)
+                .match_header("content-type", "application/x-www-form-urlencoded")
+                .match_body("csrf_token=csrf")
+                .with_body(body)
+                .expect(1)
+                .create();
+            assert_eq!(
+                game.scratch_at(&format!("{}/scratch", server.url()))
+                    .is_ok(),
+                valid
+            );
+            reward.assert();
+            reward.remove();
+        }
+        page.assert();
+    }
+
+    #[test]
+    fn readonly_session_does_not_require_csrf_and_never_submits_rewards_without_it() {
+        let mut server = mockito::Server::new();
+        let page = server
+            .mock("GET", "/index")
+            .with_body("<div id='tokens-display'>50</div>")
+            .expect(1)
+            .create();
+        let query = server
+            .mock("GET", "/status")
+            .with_body(r#"{"success":true,"challenges":[]}"#)
+            .expect(1)
+            .create();
+        let mut game = GameSession::open(&format!("{}/index", server.url())).unwrap();
+        assert_eq!(
+            game.tasks_at(&format!("{}/status", server.url())).unwrap()["success"],
+            true
+        );
+        assert!(game.spin().is_err());
+        assert!(game.scratch().is_err());
+        assert!(game.claim(&[1], |_| panic!("Must not submit")).is_err());
+        assert!(
+            game.math(|_| panic!("Must not submit"), |_| panic!("Must not prompt"))
+                .is_err()
+        );
+        page.assert();
+        query.assert();
+    }
+
+    #[test]
+    fn status_claim_and_spin_share_one_bootstrap_and_stream_in_order() {
+        let mut server = mockito::Server::new();
+        let page = server
+            .mock("GET", "/index")
+            .with_header("set-cookie", "PHPSESSID=shared; Path=/")
+            .with_body(
+                "<input name='csrf_token' value='shared-csrf'><div id='tokens-display'>50</div>",
+            )
+            .expect(1)
+            .create();
+        let status = server
+            .mock("GET", "/status")
+            .match_header("cookie", "PHPSESSID=shared")
+            .with_body(
+                r#"{"success":true,"challenges":[{"id":1,"completed":true,"rewarded":false}]}"#,
+            )
+            .expect(1)
+            .create();
+        let claim = server
+            .mock("POST", "/api/record_activity.php")
+            .match_header("cookie", "PHPSESSID=shared")
+            .match_body(mockito::Matcher::Regex("(?s)activity_id.*1".into()))
+            .with_body(r#"{"success":true,"new_token_balance":75}"#)
+            .expect(1)
+            .create();
+        let spin = server
+            .mock("POST", "/spin")
+            .match_header("cookie", "PHPSESSID=shared")
+            .with_body(r#"{"value":"50","new_token_balance":50,"new_week_points":100}"#)
+            .expect(1)
+            .create();
+        let mut game = GameSession::new(&format!("{}/index", server.url())).unwrap();
+        assert_eq!(game.tokens, Some(50));
+        let tasks = game.tasks_at(&format!("{}/status", server.url())).unwrap();
+        assert_eq!(tasks["challenges"][0]["id"], 1);
+        let mut streamed = false;
+        game.claim_at(&[1], &format!("{}/api", server.url()), &mut |item| {
+            assert_eq!(item["id"], 1);
+            streamed = true;
+            assert!(!spin.matched());
+        })
+        .unwrap();
+        assert!(streamed);
+        assert_eq!(game.tokens, Some(75));
+        game.spin_at(&format!("{}/spin", server.url())).unwrap();
+        for request in [page, status, claim, spin] {
+            request.assert();
+        }
+    }
+
+    #[test]
+    fn already_claimed_keeps_balance_but_unknown_success_invalidates_it() {
+        let mut server = mockito::Server::new();
+        let page = server
+            .mock("GET", "/index")
+            .with_body("<input name='csrf_token' value='csrf'><div id='tokens-display'>50</div>")
+            .expect(1)
+            .create();
+        let mut game = GameSession::new(&format!("{}/index", server.url())).unwrap();
+        for (body, expected) in [
+            (
+                r#"{"success":false,"message":"Task already completed today"}"#,
+                Some(50),
+            ),
+            (
+                r#"{"success":false,"error":"Reward already claimed"}"#,
+                Some(50),
+            ),
+            (r#"{"success":true}"#, None),
+        ] {
+            let request = server
+                .mock("POST", "/api/record_activity.php")
+                .with_body(body)
+                .expect(1)
+                .create();
+            game.claim_at(&[1], &format!("{}/api", server.url()), &mut |_| ())
+                .unwrap();
+            assert_eq!(game.tokens, expected);
+            request.assert();
+            request.remove();
+        }
+        page.assert();
+    }
 
     #[test]
     fn reads_bootstrap_balance_including_zero_and_grouped_numbers() {

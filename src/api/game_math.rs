@@ -12,6 +12,7 @@ impl super::check_in::GameSession {
         on_answer: impl FnMut(&Value),
         manual_answer: impl FnMut(&Value) -> Result<String>,
     ) -> Result<Value> {
+        super::check_in::require_csrf(&self.csrf)?;
         play(&self.web, ENDPOINT, &self.csrf, on_answer, manual_answer)
     }
 }
@@ -124,6 +125,78 @@ fn solve(question: &Value) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn complete_game_streams_twenty_answers_without_extra_requests() {
+        let mut server = mockito::Server::new();
+        let stage = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let observed = stage.clone();
+        let request = server.mock("POST", "/math")
+            .with_body_from_request(move |request| {
+                let body = String::from_utf8_lossy(request.body().unwrap());
+                let step = observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let value = if step == 0 {
+                    assert!(body.contains("start_game"));
+                    json!({"success":true,"balance":75})
+                } else if step % 2 == 1 {
+                    assert!(body.contains("get_question"));
+                    json!({"level":step.div_ceil(2),"question":"2 + 3","options":[5,6,7,8]})
+                } else {
+                    assert!(body.contains("submit_answer"));
+                    assert!(body.contains("\r\n5\r\n"));
+                    json!({"result":if step==40 {"win"} else {"correct"},"total_score":step/2*5,"bg_reward":10})
+                };
+                value.to_string().into_bytes()
+            }).expect(41).create();
+        let mut answers = 0;
+        let response = play(
+            &web_client().unwrap(),
+            &format!("{}/math", server.url()),
+            "csrf",
+            |item| {
+                answers += 1;
+                assert_eq!(item["level"], answers);
+                assert_eq!(
+                    stage.load(std::sync::atomic::Ordering::SeqCst),
+                    1 + answers * 2
+                );
+            },
+            |_| panic!("Must not prompt"),
+        )
+        .unwrap();
+        assert_eq!(answers, 20);
+        assert_eq!(response["result"], "win");
+        assert_eq!(response["bg_reward"], 10);
+        request.assert();
+    }
+
+    #[test]
+    fn failed_start_is_not_retried_and_never_fetches_questions() {
+        let mut server = mockito::Server::new();
+        let start = server
+            .mock("POST", "/math")
+            .match_body(mockito::Matcher::Regex("(?s)start_game".into()))
+            .with_body(r#"{"success":false,"error":"Not enough points"}"#)
+            .expect(1)
+            .create();
+        let question = server
+            .mock("POST", "/math")
+            .match_body(mockito::Matcher::Regex("(?s)get_question".into()))
+            .expect(0)
+            .create();
+        assert!(
+            play(
+                &web_client().unwrap(),
+                &format!("{}/math", server.url()),
+                "csrf",
+                |_| panic!("Must not answer"),
+                |_| panic!("Must not prompt")
+            )
+            .is_err()
+        );
+        start.assert();
+        question.assert();
+    }
 
     #[test]
     fn repeated_games_reuse_bootstrap_cookie_and_csrf() {

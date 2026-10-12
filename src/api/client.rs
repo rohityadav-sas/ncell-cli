@@ -4,9 +4,13 @@ use std::time::Duration;
 
 pub const BASE_URL: &str = "https://sca.ncell.com.np/adl/et/telco/selfcare/ncell/api";
 
+#[derive(Clone)]
 pub struct Client {
     http: reqwest::blocking::Client,
     base_url: String,
+    pub(super) categories_cache: std::sync::Arc<
+        std::sync::Mutex<std::collections::HashMap<String, (std::time::Instant, Value)>>,
+    >,
 }
 
 impl Client {
@@ -25,6 +29,7 @@ impl Client {
         Ok(Self {
             http,
             base_url: base_url.trim_end_matches('/').into(),
+            categories_cache: Default::default(),
         })
     }
 

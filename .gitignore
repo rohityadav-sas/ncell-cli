@@ -9,5 +9,3 @@ session.json
 *.sqlite-*
 *token*.json
 /sync_token.ps1
-/tests/*
-!/tests/script_flow.rs
