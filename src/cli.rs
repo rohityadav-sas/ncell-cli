@@ -454,44 +454,82 @@ fn authenticated<T>(request: impl Fn(&Client, &Account, &str) -> Result<T>) -> R
 }
 
 fn print_ranks(response: &Value) {
-    println!("{}", text(&response["week"]));
-    let performance = &response["performance"];
-    if !performance.is_null() {
+    let heading = Style::new().bold();
+    let title = AnsiColor::Cyan.on_default().bold();
+    let dim = Style::new().dimmed();
+    anstream::println!("\n{title}{}{title:#}", text(&response["week"]));
+    let current = &response["performance"];
+    if !current.is_null() {
+        anstream::println!(
+            "\n{heading}Your performance{heading:#}  {dim}{}{dim:#}",
+            text(&current["period"])
+        );
         println!(
-            "Your rank: {}. Points: {}. Tokens: {}. Streak: {} days.",
-            performance["rank"],
-            performance["points"],
-            performance["tokens"],
-            performance["streak_days"]
+            "  Rank    #{}\n  Points  {}\n  Tokens  {}\n  Streak  {} days",
+            formatted_number(&current["rank"]),
+            formatted_number(&current["points"]),
+            formatted_number(&current["tokens"]),
+            formatted_number(&current["streak_days"])
         );
     }
     let last = &response["last_week"];
     if !last.is_null() {
+        anstream::println!(
+            "\n{heading}Last week{heading:#}  {dim}{}{dim:#}",
+            text(&last["period"])
+        );
         println!(
-            "Last week: rank {}. Points: {}. Prize: {}.",
-            last["rank"],
-            last["points"],
-            text(&last["prize"])
+            "  Rank    #{}\n  Points  {}\n  Prize   {}",
+            formatted_number(&last["rank"]),
+            formatted_number(&last["points"]),
+            text(&last["prize"]).trim_start_matches(|c: char| !c.is_ascii_alphanumeric())
         );
     }
+    let players = response["players"].as_array();
+    anstream::println!("\n{heading}Top players{heading:#}");
     println!(
-        "\n{:<6}  {:<12}  {:>10}  Activity",
+        "  {:>4}  {:<12}  {:>10}  Activity",
         "Rank", "Player", "Points"
     );
-    println!("{}", "-".repeat(48));
-    for player in response["players"].as_array().into_iter().flatten() {
-        println!(
-            "{:<6}  {:<12}  {:>10}  {}",
-            player["rank"].to_string(),
+    anstream::println!("  {dim}{}{dim:#}", "-".repeat(48));
+    for player in players.into_iter().flatten() {
+        let style = if player["rank"].as_u64().is_some_and(|rank| rank <= 3) {
+            AnsiColor::Yellow.on_default()
+        } else {
+            Style::new()
+        };
+        anstream::println!(
+            "  {style}{:>4}{style:#}  {:<12}  {:>10}  {}",
+            formatted_number(&player["rank"]),
             text(&player["number"]),
-            player["points"].to_string(),
+            formatted_number(&player["points"]),
             text(&player["activity"])
         );
     }
-    println!("\n{:<14}  Reward", "Prize ranks");
+    anstream::println!("\n{heading}Weekly prizes{heading:#}");
+    println!("  {:<14}  {:>6}", "Rank range", "Reward");
+    anstream::println!("  {dim}{}{dim:#}", "-".repeat(22));
     for prize in response["prizes"].as_array().into_iter().flatten() {
-        println!("{:<14}  {}", text(&prize["ranks"]), text(&prize["reward"]));
+        println!(
+            "  {:<14}  {:>6}",
+            text(&prize["ranks"]),
+            text(&prize["reward"])
+        );
     }
+    println!();
+}
+
+fn formatted_number(value: &Value) -> String {
+    let Some(number) = value.as_u64() else {
+        return "-".into();
+    };
+    let mut result = number.to_string();
+    let mut index = result.len();
+    while index > 3 {
+        index -= 3;
+        result.insert(index, ',');
+    }
+    result
 }
 
 fn print_tasks(response: &Value) -> Result<()> {
