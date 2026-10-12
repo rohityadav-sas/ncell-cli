@@ -191,7 +191,7 @@ pub fn run(args: Args) -> Result<()> {
                                 &url,
                                 |item| {
                                     let message = format!(
-                                        "Level {}: {} = {} | {} | Score {}",
+                                        "Level {:>2}: {:<28} = {:>5} | {:<7} | Score {:>3}",
                                         formatted_number(&item["level"]),
                                         text(&item["question"]),
                                         text(&item["answer"]),
