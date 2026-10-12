@@ -5,12 +5,7 @@ use serde_json::Value;
 use std::time::Duration;
 
 pub fn check_in(url: &str, activities: &[u64], mut on_task: impl FnMut(&Value)) -> Result<Value> {
-    let web = Client::builder()
-        .cookie_store(true)
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(90))
-        .user_agent("Mozilla/5.0 (Linux; Android 13; wv) AppleWebKit/537.36 Version/4.0 Chrome/120.0.0.0 Mobile Safari/537.36")
-        .build().map_err(Error::from_http)?;
+    let web = web_client()?;
     submit(
         &web,
         url,
@@ -18,6 +13,32 @@ pub fn check_in(url: &str, activities: &[u64], mut on_task: impl FnMut(&Value)) 
         "https://sajeeb.com.np/ncellapp/checkin/api",
         &mut on_task,
     )
+}
+
+fn web_client() -> Result<Client> {
+    Client::builder()
+        .cookie_store(true)
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(90))
+        .user_agent("Mozilla/5.0 (Linux; Android 13; wv) AppleWebKit/537.36 Version/4.0 Chrome/120.0.0.0 Mobile Safari/537.36")
+        .build().map_err(Error::from_http)
+}
+
+pub fn game_tasks(url: &str) -> Result<Value> {
+    tasks(
+        &web_client()?,
+        url,
+        "https://sajeeb.com.np/ncellapp/checkin/api/challenge_status.php",
+    )
+}
+
+fn tasks(web: &Client, url: &str, endpoint: &str) -> Result<Value> {
+    web.get(url)
+        .send()
+        .map_err(Error::from_http)?
+        .error_for_status()
+        .map_err(Error::from_http)?;
+    decode(web.get(endpoint).send().map_err(Error::from_http)?)
 }
 
 fn submit(
@@ -78,6 +99,10 @@ fn claim(web: &Client, endpoint: &str, csrf: &str, activity: Option<u64>) -> Res
         .multipart(form)
         .send()
         .map_err(Error::from_http)?;
+    decode(response)
+}
+
+fn decode(response: reqwest::blocking::Response) -> Result<Value> {
     let status = response.status();
     let data: Value = response.json().map_err(|_| Error::InvalidResponse)?;
     if !status.is_success() || data["success"] != true {
@@ -85,7 +110,7 @@ fn claim(web: &Client, endpoint: &str, csrf: &str, activity: Option<u64>) -> Res
             message: data["message"]
                 .as_str()
                 .or_else(|| data["error"].as_str())
-                .unwrap_or("Check-in failed")
+                .unwrap_or("Game request failed")
                 .to_owned(),
             status: status.as_u16(),
             response: Box::new(data),
@@ -97,6 +122,33 @@ fn claim(web: &Client, endpoint: &str, csrf: &str, activity: Option<u64>) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tasks_need_only_the_session_cookie_and_no_csrf_or_body() {
+        let mut server = mockito::Server::new();
+        let page = server
+            .mock("GET", "/index.php")
+            .with_header("set-cookie", "PHPSESSID=tasks-session; Path=/")
+            .with_body("No CSRF input needed")
+            .expect(1)
+            .create();
+        let query = server
+            .mock("GET", "/api/challenge_status.php")
+            .match_header("cookie", "PHPSESSID=tasks-session")
+            .match_body("")
+            .with_body(r#"{"success":true,"challenges":[],"summary":{"completed_today":0}}"#)
+            .expect(1)
+            .create();
+        let response = tasks(
+            &web_client().unwrap(),
+            &format!("{}/index.php", server.url()),
+            &format!("{}/api/challenge_status.php", server.url()),
+        )
+        .unwrap();
+        assert_eq!(response["summary"]["completed_today"], 0);
+        page.assert();
+        query.assert();
+    }
 
     #[test]
     fn activity_sends_id_and_fresh_csrf_once() {

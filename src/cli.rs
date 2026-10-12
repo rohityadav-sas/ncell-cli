@@ -104,6 +104,8 @@ enum SmsCommand {
 
 #[derive(Subcommand)]
 enum GameCommand {
+    /// List game tasks, rewards and current progress.
+    Tasks,
     /// Claim the daily check-in reward.
     CheckIn,
     /// Claim completed tasks in order; accepts comma-separated IDs.
@@ -136,13 +138,22 @@ fn parse_sort(value: &str) -> std::result::Result<(Sort, bool), String> {
 pub fn run(args: Args) -> Result<()> {
     match args.command {
         Command::Game { action } => {
-            let id = match action {
-                GameCommand::CheckIn => Vec::new(),
-                GameCommand::ClaimTask { ids } => ids,
-            };
             let url = authenticated(|client, account, _| {
                 client.check_in_url(&account.msisdn, &account.access_token)
             })?;
+            let id = match action {
+                GameCommand::Tasks => {
+                    let response = ncell_cli::api::game_tasks(&url)?;
+                    if args.json {
+                        println!("{response:#}");
+                    } else {
+                        print_tasks(&response)?;
+                    }
+                    return Ok(());
+                }
+                GameCommand::CheckIn => Vec::new(),
+                GameCommand::ClaimTask { ids } => ids,
+            };
             let response = ncell_cli::api::check_in(&url, &id, |item| {
                 if !args.json {
                     print_task(item);
@@ -430,6 +441,47 @@ fn authenticated<T>(request: impl Fn(&Client, &Account, &str) -> Result<T>) -> R
     AuthService::new(Client::new()?, KeyringStore::new()?).authenticated(request)
 }
 
+fn print_tasks(response: &Value) -> Result<()> {
+    let tasks = response["challenges"]
+        .as_array()
+        .ok_or(Error::InvalidResponse)?;
+    if tasks.is_empty() {
+        println!("No game tasks available.");
+        return Ok(());
+    }
+    let width = tasks
+        .iter()
+        .map(|task| text(&task["title"]).chars().count())
+        .max()
+        .unwrap_or(4)
+        .max(4);
+    println!(
+        "{:<6}  {:<width$}  {:>9}  {:>6}  {:>6}  {:<8}  Status",
+        "ID", "Task", "Progress", "Tokens", "XP", "Reset"
+    );
+    println!("{}", "-".repeat(width + 53));
+    for task in tasks {
+        let progress = format!("{}/{}", task["current_progress"], task["target_value"]);
+        let status = if task["rewarded"] == 1 || task["rewarded"] == true {
+            "Claimed"
+        } else if task["completed"] == 1 || task["completed"] == true {
+            "Completed"
+        } else {
+            "Pending"
+        };
+        println!(
+            "{:<6}  {:<width$}  {:>9}  {:>6}  {:>6}  {:<8}  {status}",
+            task["id"].to_string(),
+            text(&task["title"]),
+            progress,
+            task["reward_tokens"].to_string(),
+            task["reward_xp"].to_string(),
+            text(&task["reset_type"])
+        );
+    }
+    Ok(())
+}
+
 fn print_task(item: &Value) {
     let data = &item["response"];
     if data["success"] == true {
@@ -600,6 +652,7 @@ mod tests {
             vec!["plans", "subscribe", "1225"],
             vec!["refresh"],
             vec!["game", "check-in"],
+            vec!["game", "tasks"],
             vec!["game", "claim-task", "1,2,3"],
         ] {
             let args =
