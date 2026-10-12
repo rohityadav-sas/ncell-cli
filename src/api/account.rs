@@ -3,6 +3,28 @@ use crate::error::{Error, Result};
 use serde_json::{Value, json};
 
 impl Client {
+    pub fn check_in_url(&self, msisdn: &str, token: &str) -> Result<String> {
+        let response = self.post(
+            "/v1.0/utilitymgt/third-party-encryption",
+            &json!({
+                "thirdPartyClientRequest": {"clientId": "47c0b8f2-1766-c12a-5c88-519e40af83b4"},
+                "requestHeader": {"msisdn": msisdn},
+            }),
+            Some(token),
+        )?;
+        let encrypted = required_text(&response["encryptionResponse"]["msisdn"])?;
+        // The API already URL-encodes this value; encoding it again breaks authentication.
+        if !encrypted
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"%-._~".contains(&b))
+        {
+            return Err(Error::InvalidResponse);
+        }
+        Ok(format!(
+            "https://sajeeb.com.np/ncellapp/checkin/index.php?MSISDN={encrypted}"
+        ))
+    }
+
     pub fn send_free_sms(
         &self,
         msisdn: &str,
@@ -180,4 +202,42 @@ fn required_text(value: &Value) -> Result<&str> {
         .as_str()
         .filter(|s| !s.is_empty())
         .ok_or(Error::InvalidResponse)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_in_preserves_encoded_identity_and_rejects_missing_identity() {
+        let mut server = mockito::Server::new();
+        let client = Client::with_base_url(&server.url()).unwrap();
+        for encrypted in [json!("abc%2Bdef%2Fghi%3D"), Value::Null] {
+            let request = server
+                .mock("POST", "/v1.0/utilitymgt/third-party-encryption")
+                .match_header("authorization", "Bearer test-token")
+                .match_body(mockito::Matcher::Json(json!({
+                    "thirdPartyClientRequest": {"clientId": "47c0b8f2-1766-c12a-5c88-519e40af83b4"},
+                    "requestHeader": {"msisdn": "9800000000"},
+                })))
+                .with_body(
+                    json!({
+                        "responseHeader": {"responseCode": "200"},
+                        "encryptionResponse": {"msisdn": encrypted},
+                    })
+                    .to_string(),
+                )
+                .create();
+            let result = client.check_in_url("9800000000", "test-token");
+            if let Some(encrypted) = encrypted.as_str() {
+                assert_eq!(
+                    result.unwrap(),
+                    format!("https://sajeeb.com.np/ncellapp/checkin/index.php?MSISDN={encrypted}")
+                );
+            } else {
+                assert!(matches!(result, Err(Error::InvalidResponse)));
+            }
+            request.assert();
+        }
+    }
 }

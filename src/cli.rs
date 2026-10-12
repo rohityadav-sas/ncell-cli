@@ -45,6 +45,8 @@ enum Command {
     Balance,
     /// Query the subscriber profile; use --json for all details.
     Profile,
+    /// Generate the authenticated daily check-in link. Does not claim a reward.
+    CheckIn,
     /// Send a free SMS to a Nepal mobile number.
     SendFreeSms { number: String, text: String },
     /// Search plans on the server within a catalog category.
@@ -116,6 +118,12 @@ pub fn run(args: Args) -> Result<()> {
         command => command,
     };
     match command {
+        Command::CheckIn => {
+            let url = authenticated(|client, account, _| {
+                client.check_in_url(&account.msisdn, &account.access_token)
+            })?;
+            output(args.json, json!({"url": url}), &url);
+        }
         Command::SendFreeSms { number, text } => {
             let response = authenticated(|client, account, _| {
                 client.send_free_sms(&account.msisdn, &account.access_token, &number, &text)
