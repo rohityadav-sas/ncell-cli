@@ -22,36 +22,6 @@
 
 
 
-## Commands
-
-
-
-| Action | Command |
-|---|---|
-| Log in and activate an account | `ncell login 98XXXXXXXX` |
-| Add an account without switching | `ncell account add 98XXXXXXXX` |
-| List saved accounts | `ncell account list` |
-| Switch accounts | `ncell account switch 98XXXXXXXX` |
-| Remove a saved account | `ncell account remove 98XXXXXXXX` |
-| Show account balance | `ncell balance` |
-| List plan categories | `ncell plans categories` |
-| Browse SMS plans | `ncell plans --category 50` |
-| Subscribe to a plan (charges apply) | `ncell plans subscribe 984 --category 50` |
-| Show game task status | `ncell game status` |
-| Show rankings | `ncell game ranks` |
-| Play three spins with a delay | `ncell game spin --count 3 --delay 1.5s` |
-| Play three scratch cards with a delay | `ncell game scratch --count 3 --delay 1.5s` |
-| Play three math games with a delay | `ncell game math --count 3 --delay 1.5s` |
-| Claim the daily check-in | `ncell game check-in` |
-| Claim task rewards | `ncell game claim-task 1,2,3` |
-| Show help | `ncell --help` |
-
-
-
-Actions and required inputs are plain words; options use `--long-name` (no short flags). Add `--json` for JSON output.
-
-
-
 ## Example
 
 
