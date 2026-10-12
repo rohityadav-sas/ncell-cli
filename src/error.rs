@@ -26,6 +26,8 @@ pub enum Error {
     },
     #[error("One or more tasks could not be claimed")]
     GameTasks { response: Box<serde_json::Value> },
+    #[error("Math game lost")]
+    GameLost,
     #[error("Credential storage is unavailable or locked; unlock your system keyring and retry")]
     Storage,
     #[error("Saved session is invalid; run `ncell logout` to reset it")]

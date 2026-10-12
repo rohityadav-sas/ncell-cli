@@ -213,20 +213,12 @@ pub fn run(args: Args) -> Result<()> {
                                     )
                                 },
                             )?;
-                            let message = format!(
-                                "Math {} | Score {} | Tokens awarded {}",
-                                response["result"]
-                                    .as_str()
-                                    .unwrap_or(if response["win"] == true {
-                                        "win"
-                                    } else {
-                                        "game_over"
-                                    }),
-                                formatted_number(&response["total_score"]),
-                                formatted_number(&response["bg_reward"])
-                            );
+                            let (won, message) = math_summary(&response);
                             output(args.json, response, message);
                             io::stdout().flush().map_err(|_| Error::InvalidResponse)?;
+                            if !won {
+                                return Err(Error::GameLost);
+                            }
                             continue;
                         }
                         let response = if scratch {
@@ -700,6 +692,28 @@ fn text(value: &Value) -> &str {
     value.as_str().unwrap_or("")
 }
 
+fn math_summary(response: &Value) -> (bool, String) {
+    let won = response["result"] == "win" || response["win"] == true;
+    let score = response
+        .get("total_score")
+        .filter(|value| !value.is_null())
+        .unwrap_or(&response["score"]);
+    let reward = response
+        .get("bg_reward")
+        .filter(|value| !value.is_null())
+        .cloned()
+        .unwrap_or(json!(0));
+    (
+        won,
+        format!(
+            "Math {} | Score {} | Tokens awarded {}",
+            if won { "win" } else { "game_over" },
+            formatted_number(score),
+            formatted_number(&reward)
+        ),
+    )
+}
+
 fn manual_math_answer(
     question: &Value,
     input: &mut impl io::BufRead,
@@ -866,6 +880,24 @@ mod tests {
         ] {
             assert!(Args::try_parse_from(std::iter::once("ncell").chain(command)).is_err());
         }
+    }
+
+    #[test]
+    fn math_summaries_preserve_zero_scores_and_classify_losses() {
+        for response in [
+            json!({"result":"game_over","score":0}),
+            json!({"game_over":true,"total_score":null,"score":0}),
+            json!({"result":"lose","score":0}),
+        ] {
+            let (won, message) = math_summary(&response);
+            assert!(!won);
+            assert_eq!(message, "Math game_over | Score 0 | Tokens awarded 0");
+        }
+        assert_eq!(
+            math_summary(&json!({"result":"win","total_score":165,"score":145,"bg_reward":10})),
+            (true, "Math win | Score 165 | Tokens awarded 10".into())
+        );
+        assert!(math_summary(&json!({"win":true,"score":165,"bg_reward":10})).0);
     }
 
     #[test]

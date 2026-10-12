@@ -12,6 +12,7 @@ fn main() -> std::process::ExitCode {
     let json = args.json;
     match cli::run(args) {
         Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(ncell_cli::error::Error::GameLost) => std::process::ExitCode::FAILURE,
         Err(error) => {
             if json {
                 if let ncell_cli::error::Error::Api { response, .. }
