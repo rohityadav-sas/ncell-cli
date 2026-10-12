@@ -120,33 +120,38 @@ ncell --help
 
 
 
-**Prebuilt binaries**
+## Prebuilt binaries
 
-
-
-Download a ZIP from [Releases](https://github.com/rohityadav-sas/ncell-cli/releases/latest) for your platform:
-
-
+Download the ZIP archive for your platform from [Releases](<https://github.com/rohityadav-sas/ncell-cli/releases/latest>).
 
 | Platform | Architecture | Archive suffix |
-
 | --- | --- | --- |
-
 | Windows | x64 | `windows-x86_64.zip` |
-
 | Windows | ARM64 | `windows-arm64.zip` |
-
 | Linux | x64 | `linux-x86_64.zip` |
-
 | Linux | ARM64 | `linux-arm64.zip` |
-
 | macOS | Intel | `macos-x86_64.zip` |
-
 | macOS | Apple Silicon | `macos-arm64.zip` |
 
+### Running the binary
 
+1. Extract the downloaded ZIP archive.
+2. Run the executable using the appropriate command:
 
-Extract the ZIP and run `ncell --help` (`.\ncell.exe --help` on Windows). On Linux and macOS, run `chmod +x ncell` first, then `./ncell --help`. Add the executable's directory to your `PATH` to run it anywhere.
+**Windows (PowerShell):**
+
+```
+   .\ncell.exe --help
+```
+
+**Linux and macOS:**
+
+```
+   chmod +x ncell
+   ./ncell --help
+```
+
+3. (Optional) Add the directory containing the executable to your `PATH` to run `ncell` from anywhere.
 
 
 
