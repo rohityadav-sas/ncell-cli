@@ -9,7 +9,7 @@ homepage = "https://rohityadav-sas.github.io/ncell-cli/"
 readme = "README.md"
 keywords = ["ncell", "cli", "nepal", "sms"]
 categories = ["command-line-utilities"]
-include = ["src/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE"]
+include = ["src/**", "tests/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE"]
 
 [[bin]]
 name = "ncell"
