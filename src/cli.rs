@@ -187,11 +187,18 @@ pub fn run(args: Args) -> Result<()> {
                             std::thread::sleep(delay);
                         }
                         if math {
+                            if !args.json {
+                                println!(
+                                    "{:>5}  {:<28}  {:>6}  {:<7}  {:>5}",
+                                    "Level", "Question", "Answer", "Result", "Score"
+                                );
+                                println!("{}", "-".repeat(59));
+                            }
                             let response = ncell_cli::api::game_math(
                                 &url,
                                 |item| {
                                     let message = format!(
-                                        "Level {:>2}: {:<28} = {:>5} | {:<7} | Score {:>3}",
+                                        "{:>5}  {:<28}  {:>6}  {:<7}  {:>5}",
                                         formatted_number(&item["level"]),
                                         text(&item["question"]),
                                         text(&item["answer"]),
