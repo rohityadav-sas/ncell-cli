@@ -141,14 +141,14 @@ Download the ZIP archive for your platform from [Releases](<https://github.com/r
 **Windows (PowerShell):**
 
 ```
-   .\ncell.exe --help
+.\ncell.exe --help
 ```
 
 **Linux and macOS:**
 
 ```
-   chmod +x ncell
-   ./ncell --help
+chmod +x ncell
+./ncell --help
 ```
 Linux credential storage requires an unlocked Secret Service provider, such as GNOME Keyring or KWallet with Secret Service enabled.
 
