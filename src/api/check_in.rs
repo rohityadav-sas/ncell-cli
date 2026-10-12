@@ -15,7 +15,7 @@ pub fn check_in(url: &str, activities: &[u64], mut on_task: impl FnMut(&Value)) 
     )
 }
 
-fn web_client() -> Result<Client> {
+pub(super) fn web_client() -> Result<Client> {
     Client::builder()
         .cookie_store(true)
         .redirect(reqwest::redirect::Policy::none())

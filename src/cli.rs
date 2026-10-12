@@ -105,6 +105,8 @@ enum SmsCommand {
 
 #[derive(Subcommand)]
 enum GameCommand {
+    /// Show weekly ranks, performance and prizes.
+    Ranks,
     /// List game tasks, rewards and current progress.
     Status,
     /// Claim the daily check-in reward.
@@ -143,6 +145,15 @@ pub fn run(args: Args) -> Result<()> {
                 client.check_in_url(&account.msisdn, &account.access_token)
             })?;
             let id = match action {
+                GameCommand::Ranks => {
+                    let response = ncell_cli::api::game_ranks(&url)?;
+                    if args.json {
+                        println!("{response:#}");
+                    } else {
+                        print_ranks(&response);
+                    }
+                    return Ok(());
+                }
                 GameCommand::Status => {
                     let response = ncell_cli::api::game_tasks(&url)?;
                     if args.json {
@@ -442,6 +453,47 @@ fn authenticated<T>(request: impl Fn(&Client, &Account, &str) -> Result<T>) -> R
     AuthService::new(Client::new()?, KeyringStore::new()?).authenticated(request)
 }
 
+fn print_ranks(response: &Value) {
+    println!("{}", text(&response["week"]));
+    let performance = &response["performance"];
+    if !performance.is_null() {
+        println!(
+            "Your rank: {}. Points: {}. Tokens: {}. Streak: {} days.",
+            performance["rank"],
+            performance["points"],
+            performance["tokens"],
+            performance["streak_days"]
+        );
+    }
+    let last = &response["last_week"];
+    if !last.is_null() {
+        println!(
+            "Last week: rank {}. Points: {}. Prize: {}.",
+            last["rank"],
+            last["points"],
+            text(&last["prize"])
+        );
+    }
+    println!(
+        "\n{:<6}  {:<12}  {:>10}  Activity",
+        "Rank", "Player", "Points"
+    );
+    println!("{}", "-".repeat(48));
+    for player in response["players"].as_array().into_iter().flatten() {
+        println!(
+            "{:<6}  {:<12}  {:>10}  {}",
+            player["rank"].to_string(),
+            text(&player["number"]),
+            player["points"].to_string(),
+            text(&player["activity"])
+        );
+    }
+    println!("\n{:<14}  Reward", "Prize ranks");
+    for prize in response["prizes"].as_array().into_iter().flatten() {
+        println!("{:<14}  {}", text(&prize["ranks"]), text(&prize["reward"]));
+    }
+}
+
 fn print_tasks(response: &Value) -> Result<()> {
     let tasks = response["challenges"]
         .as_array()
@@ -659,6 +711,7 @@ mod tests {
             vec!["refresh"],
             vec!["game", "check-in"],
             vec!["game", "status"],
+            vec!["game", "ranks"],
             vec!["game", "claim-task", "1,2,3"],
         ] {
             let args =
