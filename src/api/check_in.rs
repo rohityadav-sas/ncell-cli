@@ -116,6 +116,18 @@ pub fn game_spin(url: &str) -> Result<Value> {
     )
 }
 
+pub fn game_scratch(url: &str) -> Result<Value> {
+    let web = web_client()?;
+    let csrf = csrf(&web, url)?;
+    decode(
+        web.post("https://sajeeb.com.np/ncellapp/checkin/fetchScratchReward.php")
+            .form(&[("csrf_token", csrf)])
+            .send()
+            .map_err(Error::from_http)?,
+        true,
+    )
+}
+
 fn spin(web: &Client, url: &str, endpoint: &str) -> Result<Value> {
     let csrf = csrf(web, url)?;
     let response = web
@@ -145,7 +157,7 @@ fn decode(response: reqwest::blocking::Response, reward: bool) -> Result<Value> 
     let data: Value = response.json().map_err(|_| Error::InvalidResponse)?;
     let success = if reward {
         data["value"].is_string()
-            && data["new_token_balance"].is_number()
+            && (data["new_token_balance"].is_number() || data["points_remaining"].is_number())
             && data["new_week_points"].is_number()
             && data["error"].is_null()
             && data["success"] != false

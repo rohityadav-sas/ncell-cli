@@ -107,14 +107,9 @@ enum SmsCommand {
 #[derive(Subcommand)]
 enum GameCommand {
     /// Spin the wheel. Each spin costs game tokens; stops on the first failure.
-    Spin {
-        /// Number of spins.
-        #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..))]
-        count: u32,
-        /// Wait between spins: seconds by default, or use s, m, h (e.g. 1.5s).
-        #[arg(long, default_value = "0", value_parser = parse_delay)]
-        delay: Duration,
-    },
+    Spin(GamePlayOptions),
+    /// Scratch a card. Each card costs game tokens; stops on the first failure.
+    Scratch(GamePlayOptions),
     /// Show weekly ranks, performance and prizes.
     Ranks,
     /// List game tasks, rewards and current progress.
@@ -126,6 +121,16 @@ enum GameCommand {
         #[arg(required = true, value_delimiter = ',', num_args = 1.., value_parser = clap::value_parser!(u64).range(1..))]
         ids: Vec<u64>,
     },
+}
+
+#[derive(clap::Args)]
+struct GamePlayOptions {
+    /// Number of games to play.
+    #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..))]
+    count: u32,
+    /// Wait between games: seconds by default, or use s, m, h (e.g. 1.5s).
+    #[arg(long, default_value = "0", value_parser = parse_delay)]
+    delay: Duration,
 }
 
 #[derive(Clone, Copy)]
@@ -169,17 +174,29 @@ pub fn run(args: Args) -> Result<()> {
             let url = authenticated(|client, account, _| {
                 client.check_in_url(&account.msisdn, &account.access_token)
             })?;
+            let scratch = matches!(action, GameCommand::Scratch(_));
             let id = match action {
-                GameCommand::Spin { count, delay } => {
+                GameCommand::Spin(GamePlayOptions { count, delay })
+                | GameCommand::Scratch(GamePlayOptions { count, delay }) => {
                     for index in 0..count {
                         if index > 0 {
                             std::thread::sleep(delay);
                         }
-                        let response = ncell_cli::api::game_spin(&url)?;
+                        let response = if scratch {
+                            ncell_cli::api::game_scratch(&url)?
+                        } else {
+                            ncell_cli::api::game_spin(&url)?
+                        };
+                        let label = if scratch { "Scratch" } else { "Spin" };
+                        let tokens = if scratch {
+                            "points_remaining"
+                        } else {
+                            "new_token_balance"
+                        };
                         let message = format!(
-                            "Spin reward: {} | Tokens {} | Points {}",
+                            "{label} reward: {} | Tokens {} | Points {}",
                             text(&response["description"]),
-                            formatted_number(&response["new_token_balance"]),
+                            formatted_number(&response[tokens]),
                             formatted_number(&response["new_week_points"])
                         );
                         output(args.json, response, message);
