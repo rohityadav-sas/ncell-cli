@@ -514,7 +514,7 @@ ncell game claim-task 1,2,3
 ncell game claim-task 1 2 3 --json</code></pre>
             <p>Task claims run sequentially using one web session. A server rejection is reported per task while
                 remaining tasks continue; network or invalid-response errors stop the batch. JSON task output is
-                an array containing each task ID and its server response. The command exits unsuccessfully if any task fails.</p>
+                an array containing each task ID and its server response. Already-completed tasks are normal results. The command exits unsuccessfully for other task failures.</p>
             <div class="table-wrap">
                 <table>
                     <thead>

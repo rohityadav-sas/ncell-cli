@@ -154,9 +154,7 @@ pub fn run(args: Args) -> Result<()> {
                 output(args.json, response, message);
             } else {
                 let results = response.as_array().unwrap();
-                let failed = results
-                    .iter()
-                    .any(|item| item["response"]["success"] != true);
+                let failed = results.iter().any(|item| task_failed(&item["response"]));
                 if !args.json {
                     for item in results {
                         let data = &item["response"];
@@ -451,6 +449,10 @@ fn authenticated<T>(request: impl Fn(&Client, &Account, &str) -> Result<T>) -> R
     AuthService::new(Client::new()?, KeyringStore::new()?).authenticated(request)
 }
 
+fn task_failed(response: &Value) -> bool {
+    response["success"] != true && response["error"] != "Task already completed today"
+}
+
 fn text(value: &Value) -> &str {
     value.as_str().unwrap_or("")
 }
@@ -498,6 +500,18 @@ fn sort_key(plan: &Value, sort: Sort) -> f64 {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn completed_tasks_are_normal_results_but_other_failures_are_errors() {
+        assert!(!task_failed(&json!({"success": true})));
+        assert!(!task_failed(
+            &json!({"success": false, "error": "Task already completed today"})
+        ));
+        assert!(task_failed(
+            &json!({"success": false, "error": "Invalid CSRF token"})
+        ));
+        assert!(task_failed(&json!({})));
+    }
 
     #[test]
     fn game_arguments_require_one_action_and_task_ids() {
