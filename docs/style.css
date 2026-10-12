@@ -140,15 +140,16 @@ kbd .ico { width: 12px; height: 12px; }
   background: var(--bg); border-right: 1px solid var(--border);
   scrollbar-width: thin;
 }
-.nav-title { margin: 28px 10px 8px; color: var(--text); font-size: 13px; font-weight: 650; line-height: 1.4; }
+.nav-title { margin: 20px 10px 6px; color: var(--text); font-size: 13px; font-weight: 650; line-height: 1.4; }
 .nav-title:first-child { margin-top: 0; }
 #sidebar a {
   display: flex; align-items: center; gap: 10px;
-  padding: 7px 10px; margin: 1px 0; border-radius: 8px;
+  min-height: 36px; padding: 7px 10px; margin: 1px 0; border-radius: 8px;
+  line-height: 1.4;
   color: var(--text-2); font-size: 14px; font-weight: 500; text-decoration: none;
   transition: background .15s, color .15s;
 }
-#sidebar a .ico { width: 16px; height: 16px; color: var(--muted); stroke-width: 1.85; }
+#sidebar a .ico { flex-shrink: 0; width: 16px; height: 16px; color: var(--muted); stroke-width: 1.85; }
 #sidebar a:hover { background: var(--bg-muted); color: var(--text); }
 #sidebar a.active { background: var(--accent-tint); color: var(--accent); }
 #sidebar a.active .ico { color: var(--accent); }
@@ -353,3 +354,13 @@ h2 { padding-top: 30px; border-top: 1px solid var(--border); }
 @media(min-width:1400px) { main { padding-left: 72px; padding-right: 72px; } article,.page-footer { max-width: 860px; } }
 @media(max-width:540px) { .doc-banner { margin-bottom: 26px; border-radius: 14px; } .header-actions { padding-left: 4px; border: 0; } .actions { gap: 8px; } .btn { padding: 0 13px; font-size: 13px; } .lead { font-size: 17px; } }
 @media(prefers-reduced-motion:reduce) { .card:hover { transform: none; } }
+
+/* Shared grouped reference tables. */
+.code-section + .code-section { margin-top: 32px; }
+.code-heading { margin-bottom: 12px; }
+.code-heading h3 { margin: 0; font-size: 17px; }
+.code-section .table-wrap { margin: 0; }
+#command-groups th:first-child { width: 30%; }
+
+/* Action headings within documentation topics. */
+h4 { margin: 28px 0 8px; color: var(--text); font-size: 16px; font-weight: 650; line-height: 1.4; }

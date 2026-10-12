@@ -30,6 +30,8 @@ pub enum Error {
     GameLost,
     #[error("Credential storage is unavailable or locked; unlock your system keyring and retry")]
     Storage,
+    #[error("Another command is using the saved accounts. Wait for it to finish and retry")]
+    SessionBusy,
     #[error("Saved session is invalid; run `ncell logout` to reset it")]
     InvalidSession,
     #[error("No pending OTP for this number; run `ncell login <number>` first")]

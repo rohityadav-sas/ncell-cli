@@ -7,7 +7,7 @@ on:
       tag:
         description: Existing release tag
         required: true
-        default: v0.1.0
+        default: v0.2.0
       source-ref:
         description: Source commit override for an existing release
         required: false

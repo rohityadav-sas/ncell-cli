@@ -1,18 +1,19 @@
-use super::check_in::{csrf, web_client};
+#[cfg(test)]
+use super::check_in::web_client;
 use crate::error::{Error, Result};
 use reqwest::blocking::{Client, multipart::Form};
 use serde_json::{Value, json};
 
 const ENDPOINT: &str = "https://sajeeb.com.np/ncellapp/checkin/math_challenge_api.php";
 
-pub fn game_math(
-    url: &str,
-    on_answer: impl FnMut(&Value),
-    manual_answer: impl FnMut(&Value) -> Result<String>,
-) -> Result<Value> {
-    let web = web_client()?;
-    let csrf = csrf(&web, url)?;
-    play(&web, ENDPOINT, &csrf, on_answer, manual_answer)
+impl super::check_in::GameSession {
+    pub fn math(
+        &self,
+        on_answer: impl FnMut(&Value),
+        manual_answer: impl FnMut(&Value) -> Result<String>,
+    ) -> Result<Value> {
+        play(&self.web, ENDPOINT, &self.csrf, on_answer, manual_answer)
+    }
 }
 
 fn play(
@@ -123,6 +124,46 @@ fn solve(question: &Value) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repeated_games_reuse_bootstrap_cookie_and_csrf() {
+        let mut server = mockito::Server::new();
+        let page = server
+            .mock("GET", "/index")
+            .with_header("set-cookie", "PHPSESSID=reused; Path=/")
+            .with_body("<input name='csrf_token' value='shared'>")
+            .expect(1)
+            .create();
+        let start = server
+            .mock("POST", "/math")
+            .match_header("cookie", "PHPSESSID=reused")
+            .match_body(mockito::Matcher::Regex("(?s)start_game.*shared".into()))
+            .with_body(r#"{"success":true}"#)
+            .expect(2)
+            .create();
+        let question = server
+            .mock("POST", "/math")
+            .match_header("cookie", "PHPSESSID=reused")
+            .match_body(mockito::Matcher::Regex("(?s)get_question.*shared".into()))
+            .with_body(r#"{"win":true,"total_score":165}"#)
+            .expect(2)
+            .create();
+        let session =
+            super::super::check_in::GameSession::new(&format!("{}/index", server.url())).unwrap();
+        for _ in 0..2 {
+            play(
+                &session.web,
+                &format!("{}/math", server.url()),
+                &session.csrf,
+                |_| (),
+                |_| panic!("No prompt expected"),
+            )
+            .unwrap();
+        }
+        page.assert();
+        start.assert();
+        question.assert();
+    }
 
     #[test]
     fn solves_captured_question_types_without_guessing() {

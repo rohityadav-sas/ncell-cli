@@ -1,8 +1,4 @@
 #content > h2:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
-.code-section + .code-section { margin-top: 32px; }
-.code-heading { margin-bottom: 12px; }
-.code-heading h3 { margin: 0; font-size: 17px; }
-.code-section .table-wrap { margin: 0; }
 #code-rows th:first-child { width: 130px; }
 #code-rows td:first-child { white-space: nowrap; }
 #code-rows tr[data-prefix] { scroll-margin-top: calc(var(--header-h) + 24px); }

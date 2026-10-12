@@ -21,7 +21,7 @@ fn main() -> std::process::ExitCode {
                 {
                     println!("{response:#}");
                 } else {
-                    eprintln!("{}", serde_json::json!({"error": error.to_string()}));
+                    eprintln!("{:#}", serde_json::json!({"error": error.to_string()}));
                 }
             } else {
                 eprintln!("Error: {error}");

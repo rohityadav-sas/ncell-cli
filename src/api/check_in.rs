@@ -59,19 +59,21 @@ fn submit(
 ) -> Result<Value> {
     let csrf = csrf(web, url)?;
     if activities.is_empty() {
-        claim(web, &format!("{base}/checkin.php"), &csrf, None)
+        match claim(web, &format!("{base}/checkin.php"), &csrf, None) {
+            Err(Error::CheckIn { response, .. }) if already_checked_in(&response) => Ok(*response),
+            result => result,
+        }
     } else {
         let results = activities
             .iter()
             .map(|&id| {
                 let response = claim(web, &format!("{base}/record_activity.php"), &csrf, Some(id));
-                let item = match response {
-                    Ok(response) => Ok(serde_json::json!({"id": id, "response": response})),
-                    Err(Error::CheckIn { response, .. }) => {
-                        Ok(serde_json::json!({"id": id, "response": response}))
-                    }
-                    Err(error) => Err(error),
-                }?;
+                let response = match response {
+                    Ok(response) => response,
+                    Err(Error::CheckIn { response, .. }) => *response,
+                    Err(error) => return Err(error),
+                };
+                let item = serde_json::json!({"id": id, "response": response});
                 on_task(&item);
                 Ok(item)
             })
@@ -107,35 +109,39 @@ pub(super) fn csrf(web: &Client, url: &str) -> Result<String> {
         .map(str::to_owned)
 }
 
-pub fn game_spin(url: &str) -> Result<Value> {
-    let web = web_client()?;
-    spin(
-        &web,
-        url,
-        "https://sajeeb.com.np/ncellapp/checkin/fetchSpinReward.php",
-    )
+pub struct GameSession {
+    pub(super) web: Client,
+    pub(super) csrf: String,
 }
-
-pub fn game_scratch(url: &str) -> Result<Value> {
-    let web = web_client()?;
-    let csrf = csrf(&web, url)?;
-    decode(
-        web.post("https://sajeeb.com.np/ncellapp/checkin/fetchScratchReward.php")
-            .form(&[("csrf_token", csrf)])
-            .send()
-            .map_err(Error::from_http)?,
-        true,
-    )
-}
-
-fn spin(web: &Client, url: &str, endpoint: &str) -> Result<Value> {
-    let csrf = csrf(web, url)?;
-    let response = web
-        .post(endpoint)
-        .multipart(Form::new().text("csrf_token", csrf))
-        .send()
-        .map_err(Error::from_http)?;
-    decode(response, true)
+impl GameSession {
+    pub fn new(url: &str) -> Result<Self> {
+        let web = web_client()?;
+        let csrf = csrf(&web, url)?;
+        Ok(Self { web, csrf })
+    }
+    pub fn spin(&self) -> Result<Value> {
+        self.spin_at("https://sajeeb.com.np/ncellapp/checkin/fetchSpinReward.php")
+    }
+    fn spin_at(&self, endpoint: &str) -> Result<Value> {
+        decode(
+            self.web
+                .post(endpoint)
+                .multipart(Form::new().text("csrf_token", self.csrf.clone()))
+                .send()
+                .map_err(Error::from_http)?,
+            true,
+        )
+    }
+    pub fn scratch(&self) -> Result<Value> {
+        decode(
+            self.web
+                .post("https://sajeeb.com.np/ncellapp/checkin/fetchScratchReward.php")
+                .form(&[("csrf_token", &self.csrf)])
+                .send()
+                .map_err(Error::from_http)?,
+            true,
+        )
+    }
 }
 
 fn claim(web: &Client, endpoint: &str, csrf: &str, activity: Option<u64>) -> Result<Value> {
@@ -150,6 +156,15 @@ fn claim(web: &Client, endpoint: &str, csrf: &str, activity: Option<u64>) -> Res
         .send()
         .map_err(Error::from_http)?;
     decode(response, false)
+}
+
+pub fn already_checked_in(data: &Value) -> bool {
+    let message = data["message"]
+        .as_str()
+        .or_else(|| data["error"].as_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    message.contains("already checked")
 }
 
 fn decode(response: reqwest::blocking::Response, reward: bool) -> Result<Value> {
@@ -212,11 +227,9 @@ mod tests {
                 .with_body(body)
                 .expect(1)
                 .create();
-            let result = spin(
-                &web_client().unwrap(),
-                &format!("{}/index.php", server.url()),
-                &format!("{}/fetchSpinReward.php", server.url()),
-            );
+            let result = GameSession::new(&format!("{}/index.php", server.url()))
+                .unwrap()
+                .spin_at(&format!("{}/fetchSpinReward.php", server.url()));
             assert_eq!(result.is_ok(), valid);
             page.assert();
             claim.assert();
@@ -301,20 +314,15 @@ mod tests {
             .expect(1)
             .create();
         let web = Client::builder().cookie_store(true).build().unwrap();
-        let error = submit(
+        let response = submit(
             &web,
             &format!("{}/index.php", server.url()),
             &[],
             &format!("{}/api", server.url()),
             &mut |_| panic!("Daily check-in must not emit task output"),
         )
-        .unwrap_err();
-        match error {
-            Error::CheckIn { response, .. } => {
-                assert_eq!(response["message"], "Already checked in today")
-            }
-            _ => panic!("Expected check-in rejection"),
-        }
+        .unwrap();
+        assert_eq!(response["message"], "Already checked in today");
         page.assert();
         claim.assert();
     }

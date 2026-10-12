@@ -43,9 +43,28 @@
   });
   syncThemeButton();
 
+  /* ---------- Shared sidebar scroll position ---------- */
+  const SIDEBAR_SCROLL_KEY = 'ncell-docs-sidebar-scroll';
+  function saveSidebarScroll() {
+    if (!sidebar.getClientRects().length) return;
+    try { sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(sidebar.scrollTop)); } catch {}
+  }
+  function restoreSidebarScroll() {
+    try {
+      const position = Number(sessionStorage.getItem(SIDEBAR_SCROLL_KEY));
+      if (Number.isFinite(position)) sidebar.scrollTop = position;
+    } catch {}
+  }
+  restoreSidebarScroll();
+  sidebar.addEventListener('scroll', saveSidebarScroll, { passive: true });
+  window.addEventListener('pagehide', saveSidebarScroll);
+  window.addEventListener('pageshow', restoreSidebarScroll);
+
   /* ---------- Mobile navigation ---------- */
   function setMenu(open) {
+    if (!open) saveSidebarScroll();
     sidebar.classList.toggle('open', open);
+    if (open) restoreSidebarScroll();
     scrim.hidden = !open;
     menuBtn.setAttribute('aria-expanded', String(open));
   }
@@ -159,14 +178,17 @@
 
   /* ---------- Active section in the sidebar ---------- */
   const spyTargets = navLinks
+    .filter(link => link.pathname === location.pathname)
     .map(link => ({ link, heading: document.getElementById(link.hash.slice(1)) }))
-    .filter(target => target.heading);
+    .filter(target => target.heading)
+    .sort((a, b) => a.heading.compareDocumentPosition(b.heading) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
   let ticking = false;
   function updateActive() {
     ticking = false;
+    const threshold = $('.header').getBoundingClientRect().bottom + 25;
     let current = spyTargets[0];
     for (const target of spyTargets) {
-      if (target.heading.getBoundingClientRect().top <= 110) current = target;
+      if (target.heading.getBoundingClientRect().top <= threshold) current = target;
       else break;
     }
     if (innerHeight + scrollY >= root.scrollHeight - 2) current = spyTargets[spyTargets.length - 1];
@@ -181,6 +203,9 @@
     if (!ticking) { ticking = true; requestAnimationFrame(updateActive); }
   }, { passive: true });
   addEventListener('resize', updateActive);
+  addEventListener('hashchange', updateActive);
+  addEventListener('pageshow', updateActive);
+  addEventListener('load', updateActive);
   updateActive();
 
   /* ---------- Search dialog ---------- */

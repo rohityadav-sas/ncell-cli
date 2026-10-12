@@ -41,9 +41,14 @@ enum Command {
         #[arg(long)]
         verify: bool,
     },
+    /// List saved accounts or switch the active account.
+    Account {
+        #[command(subcommand)]
+        action: AccountCommand,
+    },
     /// Show local session status (does not check token validity).
     Status,
-    /// Remove the local session, including the device ID. Does not revoke server tokens.
+    /// Remove the active account locally. Does not revoke server tokens.
     Logout,
     /// Query credit, data, voice and SMS balances.
     Balance,
@@ -69,6 +74,22 @@ enum Command {
     },
     /// Rotate saved tokens. Synchronize them to any app sharing this session.
     Refresh,
+}
+
+#[derive(Subcommand)]
+enum AccountCommand {
+    /// Save an account without switching. Use --verify to resume its pending login.
+    Add {
+        number: String,
+        #[arg(long)]
+        verify: bool,
+    },
+    /// Remove a specific saved account locally.
+    Remove { number: String },
+    /// List saved accounts.
+    List,
+    /// Switch to a saved account without requesting an OTP.
+    Switch { number: String },
 }
 
 #[derive(clap::Args)]
@@ -189,20 +210,23 @@ pub fn run(args: Args) -> Result<()> {
                         );
                         println!("{}", "-".repeat(58));
                     }
+                    let game = ncell_cli::api::GameSession::new(&url)?;
                     for index in 0..count {
                         if index > 0 {
                             wait_between_games(delay, !args.json)?;
                         }
                         if math {
                             if !args.json {
+                                if index > 0 {
+                                    println!();
+                                }
                                 println!(
                                     "{:>5}  {:<28}  {:>6}  {:<7}  {:>5}",
                                     "Level", "Question", "Answer", "Result", "Score"
                                 );
                                 println!("{}", "-".repeat(59));
                             }
-                            let response = ncell_cli::api::game_math(
-                                &url,
+                            let response = game.math(
                                 |item| {
                                     let message = format!(
                                         "{:>5}  {:<28}  {:>6}  {:<7}  {:>5}",
@@ -236,9 +260,9 @@ pub fn run(args: Args) -> Result<()> {
                             continue;
                         }
                         let response = if scratch {
-                            ncell_cli::api::game_scratch(&url)?
+                            game.scratch()?
                         } else {
-                            ncell_cli::api::game_spin(&url)?
+                            game.spin()?
                         };
                         let label = if scratch { "Scratch" } else { "Spin" };
                         let tokens = if scratch {
@@ -285,12 +309,21 @@ pub fn run(args: Args) -> Result<()> {
                 }
             })?;
             if id.is_empty() {
-                let message = format!(
-                    "Check-in successful. Streak: {} days. Weekly points: {}. Game tokens: {}.",
-                    response["data"]["current_streak"],
-                    response["data"]["weekly_points"],
-                    response["data"]["game_tokens"]
-                );
+                let message = if ncell_cli::api::already_checked_in(&response) {
+                    "Already checked in today.".to_owned()
+                } else {
+                    format!(
+                        "Check-in successful. Streak: {} {}. Weekly points: {}. Game tokens: {}.",
+                        response["data"]["current_streak"],
+                        if response["data"]["current_streak"] == 1 {
+                            "day"
+                        } else {
+                            "days"
+                        },
+                        response["data"]["weekly_points"],
+                        response["data"]["game_tokens"]
+                    )
+                };
                 output(args.json, response, message);
             } else {
                 let results = response.as_array().unwrap();
@@ -352,36 +385,86 @@ pub fn run(args: Args) -> Result<()> {
                 "Refreshed tokens saved in your system credential store.\nIf this session is shared with the app, synchronize the rotated tokens back.",
             );
         }
-        Command::Login { number, verify } => {
-            let auth = AuthService::new(Client::new()?, KeyringStore::new()?);
-            if !verify {
-                auth.request_otp(&number)?;
-                eprintln!(
-                    "OTP requested. Check your SMS. To resume later: ncell login {number} --verify"
-                );
+        Command::Login { number, verify } => login(&number, verify, true, args.json)?,
+        Command::Account { action } => {
+            let store = KeyringStore::new()?;
+            let mut session = store.load()?.unwrap_or_default();
+            match action {
+                AccountCommand::Add { number, verify } => {
+                    drop(store);
+                    login(&number, verify, false, args.json)?;
+                }
+                AccountCommand::Remove { number } => {
+                    let number = normalize_number(&number)?;
+                    session.remove(number)?;
+                    store.save(&session)?;
+                    output(
+                        args.json,
+                        json!({"removed_account":number,"active_account":session.account.as_ref().map(|a| &a.msisdn)}),
+                        format!("Removed {number}."),
+                    );
+                }
+                AccountCommand::List => {
+                    let accounts: Vec<_> = session
+                        .account
+                        .iter()
+                        .map(|a| json!({"number":a.msisdn,"active":true}))
+                        .chain(
+                            session
+                                .other_accounts
+                                .iter()
+                                .map(|saved| json!({"number":saved.account.msisdn,"active":false})),
+                        )
+                        .collect();
+                    if args.json {
+                        output(true, json!(accounts), "");
+                    } else if accounts.is_empty() {
+                        println!("No saved accounts.");
+                    } else {
+                        println!("{:<12}  Status", "Number");
+                        println!("{}", "-".repeat(20));
+                        for account in accounts {
+                            println!(
+                                "{:<12}  {}",
+                                text(&account["number"]),
+                                if account["active"] == true {
+                                    "Active"
+                                } else {
+                                    ""
+                                }
+                            );
+                        }
+                    }
+                }
+                AccountCommand::Switch { number } => {
+                    let number = normalize_number(&number)?;
+                    session.switch(number)?;
+                    store.save(&session)?;
+                    output(
+                        args.json,
+                        json!({"active_account":number}),
+                        format!("Switched to {number}."),
+                    );
+                }
             }
-            eprint!("Enter OTP: ");
-            io::stderr().flush().map_err(|_| Error::Prompt)?;
-            let mut otp = String::new();
-            if io::stdin().read_line(&mut otp).map_err(|_| Error::Prompt)? == 0 {
-                return Err(Error::Prompt);
-            }
-            auth.verify_otp(&number, otp.trim())?;
-            output(
-                args.json,
-                json!({"logged_in": true, "msisdn": normalize_number(&number)?, "session_saved": true}),
-                "Logged in. Session saved in your system credential store.",
-            );
         }
         Command::Status => {
             let account = KeyringStore::new()?.load()?.and_then(|s| s.account);
             match account {
                 Some(a) => output(
                     args.json,
-                    json!({"logged_in": true, "msisdn": a.msisdn, "authenticated_at": a.authenticated_at, "token_validity_checked": false}),
+                    json!({"logged_in": true, "msisdn": a.msisdn, "authenticated_at": a.authenticated_at, "token_saved_at": a.token_saved_at, "access_token_expires_at": a.access_token_expires_at, "token_validity_checked": false}),
                     format!(
-                        "Session saved for {} ({}). Token validity not checked.",
-                        a.msisdn, a.authenticated_at
+                        "Account:       {}\nLogged in:     {}\nToken saved:   {}\nToken expires: {}",
+                        a.msisdn,
+                        status_date(&a.authenticated_at.to_rfc3339()),
+                        a.token_saved_at
+                            .map(|t| status_date(&t.to_rfc3339()))
+                            .unwrap_or_else(|| "Unknown".into()),
+                        a.access_token_expires_at
+                            .as_deref()
+                            .map(status_date)
+                            .unwrap_or_else(|| "Unknown".into())
                     ),
                 ),
                 None => output(
@@ -392,11 +475,14 @@ pub fn run(args: Args) -> Result<()> {
             }
         }
         Command::Logout => {
-            KeyringStore::new()?.clear()?;
+            let store = KeyringStore::new()?;
+            let mut session = store.load()?.unwrap_or_default();
+            session.logout();
+            store.save(&session)?;
             output(
                 args.json,
-                json!({"session_removed": true}),
-                "Local session removed.",
+                json!({"account_removed": true, "active_account": session.account.as_ref().map(|a| &a.msisdn)}),
+                "Active account removed. Run ncell account list to see remaining accounts.",
             );
         }
         command @ (Command::Balance | Command::Profile | Command::Plans { .. }) => {
@@ -541,25 +627,214 @@ pub fn run(args: Args) -> Result<()> {
                     }
                 }
             } else {
-                println!("Number: {number}");
-                for (label, key, unit) in [
-                    ("Credit", "creditBalanceDetail", "creditUom"),
-                    ("Data", "aggregateDataBalance", "uom"),
-                    ("Voice", "aggregateVoiceBalance", "uom"),
-                    ("SMS", "aggregateSmsBalance", "uom"),
-                ] {
-                    let item = &data[key];
-                    let amount = &item["balance"];
-                    let amount = amount
-                        .as_str()
-                        .map(str::to_owned)
-                        .unwrap_or_else(|| amount.to_string());
-                    println!("{label}: {amount} {}", text(&item[unit]));
-                }
+                print_balance(&data, &number);
             }
         }
     }
     Ok(())
+}
+
+fn login(number: &str, verify: bool, activate: bool, json: bool) -> Result<()> {
+    let auth = AuthService::new(Client::new()?, KeyringStore::new()?);
+    let command = if activate { "login" } else { "account add" };
+    if !verify {
+        auth.request_otp(number)?;
+        eprintln!(
+            "OTP requested. Check your SMS. To resume later: ncell {command} {number} --verify"
+        );
+    }
+    eprint!("Enter OTP: ");
+    io::stderr().flush().map_err(|_| Error::Prompt)?;
+    let mut otp = String::new();
+    if io::stdin().read_line(&mut otp).map_err(|_| Error::Prompt)? == 0 {
+        return Err(Error::Prompt);
+    }
+    auth.verify_account(number, otp.trim(), activate)?;
+    output(
+        json,
+        json!({"msisdn":normalize_number(number)?,"session_saved":true,"made_active":activate}),
+        if activate {
+            "Logged in. Session saved in your system credential store."
+        } else {
+            "Account saved. Active account unchanged."
+        },
+    );
+    Ok(())
+}
+
+fn balance_amount(item: &Value, unit: &str) -> String {
+    if item["hasUnlimitedResource"] == true {
+        return "Unlimited".into();
+    }
+    let scalar = |value: &Value| {
+        value.as_str().map(str::to_owned).unwrap_or_else(|| {
+            if value.is_null() {
+                "-".into()
+            } else {
+                value.to_string()
+            }
+        })
+    };
+    if unit == "creditUom" {
+        let value = item["balance"]
+            .as_f64()
+            .or_else(|| item["balance"].as_str()?.parse::<f64>().ok());
+        return value
+            .filter(|v| v.is_finite())
+            .map(|v| format!("Rs. {v:.2}"))
+            .unwrap_or_else(|| format!("Rs. {}", scalar(&item["balance"])));
+    }
+    let mut amount = scalar(&item["balance"]);
+    if !item["initialAmount"].is_null() {
+        amount.push_str(&format!(" / {}", scalar(&item["initialAmount"])));
+    }
+    let unit = text(&item[unit]);
+    if !unit.is_empty() {
+        amount.push_str(&format!(" {unit}"));
+    }
+    let numeric = |v: &Value| v.as_f64().or_else(|| v.as_str()?.parse::<f64>().ok());
+    if let (Some(left), Some(total)) = (numeric(&item["balance"]), numeric(&item["initialAmount"]))
+        && left.is_finite()
+        && total.is_finite()
+        && total > 0.0
+    {
+        amount.push_str(&format!(
+            " ({:.0}% left)",
+            (left / total * 100.0).clamp(0.0, 100.0)
+        ));
+    }
+    amount
+}
+
+fn status_date(value: &str) -> String {
+    if let Ok(date) = chrono::DateTime::parse_from_rfc3339(value) {
+        return date
+            .with_timezone(&chrono::FixedOffset::east_opt(5 * 3600 + 45 * 60).unwrap())
+            .format("%b %d %Y %I:%M:%S %p")
+            .to_string();
+    }
+    chrono::NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S")
+        .map(|date| date.format("%b %d %Y %I:%M:%S %p").to_string())
+        .unwrap_or_else(|_| value.to_owned())
+}
+
+fn balance_date(value: &str) -> String {
+    chrono::NaiveDateTime::parse_from_str(value, "%b %d %Y %H:%M:%S")
+        .map(|date| date.format("%b %d %Y %I:%M:%S %p").to_string())
+        .unwrap_or_else(|_| value.to_owned())
+}
+
+fn empty_allowance(item: &Value) -> bool {
+    let zero = |v: &Value| {
+        v.is_null() || v.as_f64().or_else(|| v.as_str()?.parse::<f64>().ok()) == Some(0.0)
+    };
+    item["hasUnlimitedResource"] != true && zero(&item["balance"]) && zero(&item["initialAmount"])
+}
+
+fn print_balance(data: &Value, _number: &str) {
+    for (label, key, unit) in [
+        ("Balance", "creditBalanceDetail", "creditUom"),
+        ("Data", "aggregateDataBalance", "uom"),
+        ("Voice", "aggregateVoiceBalance", "uom"),
+        ("SMS", "aggregateSmsBalance", "uom"),
+    ] {
+        let list = match label {
+            "Data" => "dataBalanceList",
+            "Voice" => "voiceBalanceList",
+            "SMS" => "smsBalanceList",
+            _ => "",
+        };
+        if !data[key].is_null()
+            && (label == "Balance" || !empty_allowance(&data[key]))
+            && !data[list].as_array().is_some_and(|packs| !packs.is_empty())
+        {
+            println!(
+                "{:<15} {}",
+                format!("{label}:"),
+                balance_amount(&data[key], unit)
+            );
+        }
+    }
+    let credit = &data["creditBalanceDetail"];
+    for (label, key) in [
+        ("Last recharge", "lastRechargeDate"),
+        ("Expires", "expiryDate"),
+    ] {
+        if let Some(value) = credit[key].as_str().filter(|v| !v.is_empty()) {
+            println!("{:<15} {}", format!("{label}:"), balance_date(value));
+        }
+    }
+    let packs: Vec<_> = [
+        ("Data", "dataBalanceList"),
+        ("Voice", "voiceBalanceList"),
+        ("SMS", "smsBalanceList"),
+        ("Bonus", "bonusBalanceList"),
+    ]
+    .into_iter()
+    .flat_map(|(kind, key)| {
+        data[key]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|pack| !empty_allowance(pack))
+            .map(move |pack| (kind, pack))
+    })
+    .collect();
+    if packs.is_empty() {
+        return;
+    }
+    let width = packs
+        .iter()
+        .map(|(_, pack)| {
+            text(&pack["accName"])
+                .chars()
+                .count()
+                .max(text(&pack["ncellName"]).chars().count())
+        })
+        .max()
+        .unwrap_or(4)
+        .max(4);
+    println!(
+        "\n{:<6}  {:<width$}  {:<32}  Expires",
+        "Type", "Pack", "Remaining / Initial"
+    );
+    let expiry_width = packs
+        .iter()
+        .map(|(_, pack)| {
+            balance_date(pack["expDate"].as_str().unwrap_or("-"))
+                .chars()
+                .count()
+        })
+        .max()
+        .unwrap_or(7)
+        .max(7);
+    println!("{}", "-".repeat(6 + 2 + width + 2 + 32 + 2 + expiry_width));
+    for (kind, pack) in packs {
+        let mut details = pack.clone();
+        let (aggregate, list) = match kind {
+            "Data" => ("aggregateDataBalance", "dataBalanceList"),
+            "Voice" => ("aggregateVoiceBalance", "voiceBalanceList"),
+            "SMS" => ("aggregateSmsBalance", "smsBalanceList"),
+            _ => ("", ""),
+        };
+        if data[list].as_array().is_some_and(|items| items.len() == 1) {
+            for key in ["balance", "uom", "hasUnlimitedResource"] {
+                if details[key].is_null() && !data[aggregate][key].is_null() {
+                    details[key] = data[aggregate][key].clone();
+                }
+            }
+        }
+        let name = pack["accName"]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .or_else(|| pack["ncellName"].as_str())
+            .unwrap_or("-");
+        println!(
+            "{kind:<6}  {name:<width$}  {:<32}  {}",
+            balance_amount(&details, "uom"),
+            balance_date(pack["expDate"].as_str().unwrap_or("-"))
+        );
+    }
 }
 
 fn authenticated<T>(request: impl Fn(&Client, &Account, &str) -> Result<T>) -> Result<T> {
@@ -574,16 +849,21 @@ fn print_ranks(response: &Value) {
     let current = &response["performance"];
     if !current.is_null() {
         anstream::println!(
-            "{heading}{:<17}{heading:#} Rank {:>6} | Points {:>8} | Tokens {} | Streak {} days",
+            "{heading}{:<17}{heading:#} Rank {:>6} | Points {:>8} | Tokens {} | Streak {} {}",
             "Your performance:",
             format!("#{}", formatted_number(&current["rank"])),
             formatted_number(&current["points"]),
             formatted_number(&current["tokens"]),
-            formatted_number(&current["streak_days"])
+            formatted_number(&current["streak_days"]),
+            if current["streak_days"] == 1 {
+                "day"
+            } else {
+                "days"
+            }
         );
     }
     let last = &response["last_week"];
-    if !last.is_null() {
+    if !last["rank"].is_null() {
         anstream::println!(
             "{heading}{:<17}{heading:#} Rank {:>6} | Points {:>8} | Prize {}",
             "Last week:",
@@ -615,7 +895,15 @@ fn print_ranks(response: &Value) {
             formatted_number(&player["rank"]),
             text(&player["number"]),
             formatted_number(&player["points"]),
-            text(&player["activity"])
+            format_args!(
+                "{}{}",
+                text(&player["activity"]),
+                if player["rank"] == current["rank"] && !current["rank"].is_null() {
+                    "  (you)"
+                } else {
+                    ""
+                }
+            )
         );
     }
     println!();
@@ -700,7 +988,13 @@ fn print_task(item: &Value) {
 }
 
 fn task_failed(response: &Value) -> bool {
-    response["success"] != true && response["error"] != "Task already completed today"
+    response["success"] != true
+        && !["Task already completed today", "Reward already claimed"].contains(
+            &response["error"]
+                .as_str()
+                .or_else(|| response["message"].as_str())
+                .unwrap_or(""),
+        )
 }
 
 fn text(value: &Value) -> &str {
@@ -795,7 +1089,7 @@ fn manual_math_answer(
 
 fn output(json: bool, data: Value, message: impl std::fmt::Display) {
     if json {
-        println!("{data}");
+        println!("{data:#}");
     } else {
         println!("{message}");
     }
