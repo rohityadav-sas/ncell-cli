@@ -461,8 +461,9 @@ fn print_ranks(response: &Value) {
     let current = &response["performance"];
     if !current.is_null() {
         anstream::println!(
-            "{heading}Your performance:{heading:#} Rank #{} | Points {} | Tokens {} | Streak {} days",
-            formatted_number(&current["rank"]),
+            "{heading}{:<17}{heading:#} Rank {:>6} | Points {:>8} | Tokens {} | Streak {} days",
+            "Your performance:",
+            format!("#{}", formatted_number(&current["rank"])),
             formatted_number(&current["points"]),
             formatted_number(&current["tokens"]),
             formatted_number(&current["streak_days"])
@@ -471,14 +472,25 @@ fn print_ranks(response: &Value) {
     let last = &response["last_week"];
     if !last.is_null() {
         anstream::println!(
-            "{heading}Last week:{heading:#} Rank #{} | Points {} | Prize {}",
-            formatted_number(&last["rank"]),
+            "{heading}{:<17}{heading:#} Rank {:>6} | Points {:>8} | Prize {}",
+            "Last week:",
+            format!("#{}", formatted_number(&last["rank"])),
             formatted_number(&last["points"]),
             text(&last["prize"]).trim_start_matches(|c: char| !c.is_ascii_alphanumeric())
         );
     }
+    anstream::println!("\n{heading}Weekly prizes{heading:#}");
+    println!("  {:<14}  {:>6}", "Rank range", "Reward");
+    anstream::println!("  {dim}{}{dim:#}", "-".repeat(22));
+    for prize in response["prizes"].as_array().into_iter().flatten() {
+        println!(
+            "  {:<14}  {:>6}",
+            text(&prize["ranks"]),
+            text(&prize["reward"])
+        );
+    }
     let players = response["players"].as_array();
-    anstream::println!("\n{heading}Top players{heading:#}");
+    anstream::println!("\n{heading}Leaderboard{heading:#}");
     println!(
         "  {:>4}  {:<12}  {:>10}  Activity",
         "Rank", "Player", "Points"
@@ -496,16 +508,6 @@ fn print_ranks(response: &Value) {
             text(&player["number"]),
             formatted_number(&player["points"]),
             text(&player["activity"])
-        );
-    }
-    anstream::println!("\n{heading}Weekly prizes{heading:#}");
-    println!("  {:<14}  {:>6}", "Rank range", "Reward");
-    anstream::println!("  {dim}{}{dim:#}", "-".repeat(22));
-    for prize in response["prizes"].as_array().into_iter().flatten() {
-        println!(
-            "  {:<14}  {:>6}",
-            text(&prize["ranks"]),
-            text(&prize["reward"])
         );
     }
     println!();
