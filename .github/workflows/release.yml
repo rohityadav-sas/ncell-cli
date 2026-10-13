@@ -7,7 +7,6 @@ on:
       tag:
         description: Existing release tag
         required: true
-        default: v0.3.0
       source-ref:
         description: Source commit override for an existing release
         required: false
@@ -50,7 +49,9 @@ jobs:
       - name: Check executable
         shell: bash
         run: |
-          target/release/${{ matrix.binary }} --version
+          version=$(cargo metadata --no-deps --format-version 1 | python -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
+          test "$TAG" = "v$version"
+          test "$(target/release/${{ matrix.binary }} --version)" = "ncell-cli $version"
           target/release/${{ matrix.binary }} --help
       - name: Package ZIP
         shell: python

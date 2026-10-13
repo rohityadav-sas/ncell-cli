@@ -21,7 +21,8 @@ impl Client {
             return Err(Error::InvalidResponse);
         }
         Ok(format!(
-            "https://sajeeb.com.np/ncellapp/checkin/index.php?MSISDN={encrypted}"
+            "{}?MSISDN={encrypted}",
+            super::game_endpoint("index.php")
         ))
     }
 
@@ -127,7 +128,7 @@ impl Client {
         category: u64,
         keyword: &str,
     ) -> Result<Value> {
-        let catalog = if category == 66 {
+        let catalog = if category == super::DEFAULT_PLAN_CATEGORY {
             "data"
         } else {
             let tags = self.categories(msisdn, token)?;

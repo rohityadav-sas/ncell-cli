@@ -9,3 +9,5 @@ session.json
 *.sqlite-*
 *token*.json
 /sync_token.ps1
+
+/docs/version.json

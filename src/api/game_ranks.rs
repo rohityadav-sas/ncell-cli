@@ -16,7 +16,7 @@ pub fn game_ranks(url: &str) -> Result<Value> {
 
 pub(super) fn fetch(web: &reqwest::blocking::Client) -> Result<Value> {
     let html = web
-        .get("https://sajeeb.com.np/ncellapp/checkin/ranks.php")
+        .get(super::game_endpoint("ranks.php"))
         .header("User-Agent", WEB_UA)
         .send()
         .map_err(Error::from_http)?

@@ -10,7 +10,7 @@ pub fn check_in(url: &str, activities: &[u64], mut on_task: impl FnMut(&Value)) 
         &web,
         url,
         activities,
-        "https://sajeeb.com.np/ncellapp/checkin/api",
+        &super::game_endpoint("api"),
         &mut on_task,
     )
 }
@@ -30,7 +30,7 @@ pub fn game_tasks(url: &str) -> Result<Value> {
     tasks(
         &web_client()?,
         url,
-        "https://sajeeb.com.np/ncellapp/checkin/api/challenge_status.php",
+        &super::game_endpoint("api/challenge_status.php"),
     )
 }
 
@@ -132,7 +132,7 @@ impl GameSession {
         Ok(Self { web, csrf, tokens })
     }
     pub fn tasks(&self) -> Result<Value> {
-        self.tasks_at("https://sajeeb.com.np/ncellapp/checkin/api/challenge_status.php")
+        self.tasks_at(&super::game_endpoint("api/challenge_status.php"))
     }
     fn tasks_at(&self, endpoint: &str) -> Result<Value> {
         decode(
@@ -149,11 +149,7 @@ impl GameSession {
     }
     pub fn claim(&mut self, activities: &[u64], mut on_task: impl FnMut(&Value)) -> Result<Value> {
         require_csrf(&self.csrf)?;
-        self.claim_at(
-            activities,
-            "https://sajeeb.com.np/ncellapp/checkin/api",
-            &mut on_task,
-        )
+        self.claim_at(activities, &super::game_endpoint("api"), &mut on_task)
     }
     fn claim_at(
         &mut self,
@@ -196,7 +192,7 @@ impl GameSession {
     }
     pub fn spin(&self) -> Result<Value> {
         require_csrf(&self.csrf)?;
-        self.spin_at("https://sajeeb.com.np/ncellapp/checkin/fetchSpinReward.php")
+        self.spin_at(&super::game_endpoint("fetchSpinReward.php"))
     }
     fn spin_at(&self, endpoint: &str) -> Result<Value> {
         decode(
@@ -210,7 +206,7 @@ impl GameSession {
     }
     pub fn scratch(&self) -> Result<Value> {
         require_csrf(&self.csrf)?;
-        self.scratch_at("https://sajeeb.com.np/ncellapp/checkin/fetchScratchReward.php")
+        self.scratch_at(&super::game_endpoint("fetchScratchReward.php"))
     }
     fn scratch_at(&self, endpoint: &str) -> Result<Value> {
         decode(

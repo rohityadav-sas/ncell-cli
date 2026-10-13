@@ -2,8 +2,6 @@ use crate::error::{Error, Result};
 use reqwest::blocking::{Client, multipart::Form};
 use serde_json::{Value, json};
 
-const ENDPOINT: &str = "https://sajeeb.com.np/ncellapp/checkin/math_challenge_api.php";
-
 impl super::check_in::GameSession {
     pub fn math(
         &self,
@@ -11,7 +9,13 @@ impl super::check_in::GameSession {
         manual_answer: impl FnMut(&Value) -> Result<String>,
     ) -> Result<Value> {
         super::check_in::require_csrf(&self.csrf)?;
-        play(&self.web, ENDPOINT, &self.csrf, on_answer, manual_answer)
+        play(
+            &self.web,
+            &super::game_endpoint("math_challenge_api.php"),
+            &self.csrf,
+            on_answer,
+            manual_answer,
+        )
     }
 }
 

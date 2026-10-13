@@ -8,7 +8,7 @@
 
 <img alt="Written in Rust" src="https://img.shields.io/badge/Written_in-Rust-702DA0?style=for-the-badge&logo=rust&logoColor=white">
 
-<img alt="ncell-cli v0.3.1" src="https://img.shields.io/badge/ncell--cli-v0.3.1-702DA0?style=for-the-badge&logo=rust&logoColor=white">
+<img alt="Latest ncell-cli release" src="https://img.shields.io/github/v/release/rohityadav-sas/ncell-cli?style=for-the-badge&color=702DA0&logo=rust&logoColor=white">
 
 <img alt="MIT licensed" src="https://img.shields.io/badge/license-MIT-1F9D55?style=for-the-badge">
 

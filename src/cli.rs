@@ -2,7 +2,7 @@ mod script;
 use clap::builder::styling::{AnsiColor, Style};
 use clap::{Parser, Subcommand};
 use ncell_cli::{
-    api::Client,
+    api::{Client, DEFAULT_PLAN_CATEGORY},
     auth::{AuthService, normalize_number},
     error::{Error, Result},
     session::{Account, KeyringStore, SessionStore},
@@ -100,7 +100,7 @@ enum AccountCommand {
 
 #[derive(clap::Args, Clone)]
 struct PlanOptions {
-    #[arg(long, default_value_t = 66)]
+    #[arg(long, default_value_t = DEFAULT_PLAN_CATEGORY)]
     category: u64,
     /// Ordered fields: price or validity, optionally followed by :asc or :desc.
     #[arg(long, value_delimiter = ',', value_parser = parse_sort, default_value = "price", value_name = "FIELD[:asc|desc],...")]
@@ -120,7 +120,7 @@ enum PlanCommand {
     /// Subscribe to a listed plan. Paid packs charge your Ncell account.
     Subscribe {
         id: String,
-        #[arg(long, default_value_t = 66)]
+        #[arg(long, default_value_t = DEFAULT_PLAN_CATEGORY)]
         category: u64,
     },
 }
