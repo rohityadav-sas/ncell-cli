@@ -153,11 +153,3 @@ chmod +x ncell
 Linux credential storage requires an unlocked Secret Service provider, such as GNOME Keyring or KWallet with Secret Service enabled.
 
 3. (Optional) Add the directory containing the executable to your `PATH` to run `ncell` from anywhere.
-
-## Maintaining shared documentation
-
-The CLI guides, sidebar, styling and browser behavior in `docs/` are also used by
-[ncell-app](https://github.com/rohityadav-sas/ncell-app). Edit shared documentation here.
-The TypeScript site adds its npm installation and package sections during its build.
-It checks for updates hourly; run its documentation workflow manually for an immediate update.
-See [documentation maintenance](https://github.com/rohityadav-sas/ncell-app/blob/main/docs-source/README.md).
