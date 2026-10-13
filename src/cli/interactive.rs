@@ -11,11 +11,10 @@ use crossterm::{
     },
     execute, queue,
     style::ResetColor,
-    terminal::{
-        self, BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate,
-    },
+    terminal::{self, BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate},
 };
 use ncell_cli::{
+    auth::AuthService,
     error::{Error, Result},
     session::{KeyringStore, SessionStore},
 };
@@ -317,28 +316,42 @@ impl CategoryCache {
                 return true;
             }
         };
-        // Read a snapshot and release the account lock before the slow request. A background
-        // suggestion must neither rotate tokens nor block a real command or OTP prompt.
-        let account = match KeyringStore::new()
-            .and_then(|store| store.load())
-            .and_then(|session| {
-                session
-                    .and_then(|session| session.account)
-                    .ok_or(Error::NotLoggedIn)
-            }) {
-            Ok(account) => account,
-            Err(error) => {
-                self.error = Some(error.to_string());
-                return true;
-            }
-        };
         let (sender, receiver) = mpsc::channel();
         self.pending = Some(receiver);
+        // Background suggestions refresh an expired access token exactly like
+        // foreground commands, but never hold the account lock across slow
+        // requests and rotate at most once: snapshot the tokens, fetch freely,
+        // and on a 401/LGN2001 rotate once, re-snapshot, and retry.
         std::thread::spawn(move || {
+            let snapshot = || -> std::result::Result<(String, String), String> {
+                let store = KeyringStore::new().map_err(|error| error.to_string())?;
+                let account = store
+                    .load()
+                    .map_err(|error| error.to_string())?
+                    .and_then(|session| session.account)
+                    .ok_or_else(|| Error::NotLoggedIn.to_string())?;
+                Ok((account.msisdn, account.access_token))
+            };
+            let rotate_once = || -> std::result::Result<(), String> {
+                let store = KeyringStore::new().map_err(|error| error.to_string())?;
+                AuthService::new(client.clone(), store)
+                    .refresh()
+                    .map_err(|error| error.to_string())
+            };
             let result = (|| {
-                let response = client
-                    .categories(&account.msisdn, &account.access_token)
-                    .map_err(|error| error.to_string())?;
+                let (msisdn, token) = snapshot()?;
+                let response = match client.categories(&msisdn, &token) {
+                    Err(Error::Api {
+                        status: 401, code, ..
+                    }) if code == "LGN2001" => {
+                        rotate_once()?;
+                        let (msisdn, token) = snapshot()?;
+                        client
+                            .categories(&msisdn, &token)
+                            .map_err(|error| error.to_string())?
+                    }
+                    response => response.map_err(|error| error.to_string())?,
+                };
                 if pack_mode {
                     let categories = completion::supported_category_ids(&response)?;
                     let total = categories.len();
@@ -346,19 +359,22 @@ impl CategoryCache {
                         completed: 0,
                         total,
                     });
+                    // Plans use fresh snapshot tokens with no locks held, so
+                    // concurrent fetches never block each other or the UI.
+                    let (msisdn, token) = snapshot()?;
                     let fetched = std::thread::scope(|scope| {
                         let completed = Arc::new(AtomicUsize::new(0));
                         let handles = categories
                             .into_iter()
                             .map(|category| {
                                 let client = client.clone();
-                                let msisdn = account.msisdn.as_str();
-                                let token = account.access_token.as_str();
+                                let msisdn = msisdn.clone();
+                                let token = token.clone();
                                 let completed = Arc::clone(&completed);
                                 let sender = sender.clone();
                                 scope.spawn(move || {
                                     let result = client
-                                        .plans(msisdn, token, category)
+                                        .plans(&msisdn, &token, category)
                                         .map(|response| (category, response))
                                         .map_err(|error| error.to_string());
                                     let completed = completed.fetch_add(1, Ordering::Relaxed) + 1;
@@ -735,6 +751,57 @@ fn viewport(input: &str, cursor: usize, available: usize) -> (usize, String) {
     (start, clipped(&input[start..], available))
 }
 
+fn wrap_notice(message: &str, available: usize) -> Vec<String> {
+    // Word-wrap long notices across the reserved empty rows instead of cutting
+    // them off; the box keeps its fixed size so nothing shifts while typing.
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    let mut line_width = 0;
+    for word in message.split_whitespace() {
+        let word_width = width(word);
+        let gap = if line.is_empty() { 0 } else { 1 };
+        if line_width + gap + word_width <= available {
+            if !line.is_empty() {
+                line.push(' ');
+            }
+            line.push_str(word);
+            line_width += gap + word_width;
+        } else {
+            if !line.is_empty() {
+                lines.push(std::mem::take(&mut line));
+                line_width = 0;
+            }
+            if word_width <= available {
+                line = word.to_owned();
+                line_width = word_width;
+            } else {
+                // Hard-cut a single overlong word by display cells.
+                let mut piece = String::new();
+                let mut piece_width = 0;
+                for ch in word.chars() {
+                    let w = ch.width().unwrap_or(0);
+                    if piece_width + w > available && !piece.is_empty() {
+                        lines.push(std::mem::take(&mut piece));
+                        piece_width = 0;
+                    }
+                    piece.push(ch);
+                    piece_width += w;
+                }
+                if !piece.is_empty() {
+                    lines.push(piece);
+                }
+            }
+        }
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    lines
+}
+
 fn dropdown(
     completion: &Completion,
     selected: usize,
@@ -801,13 +868,33 @@ fn dropdown(
         paint(BORDER, &format!("╭{}╮", "─".repeat(inner)))
     )];
     let label_limit = label_width.min(inner.saturating_sub(5));
+    // Wrap the empty-state notice across the reserved rows instead of cutting
+    // it off; only the first slots are used when there are no suggestions.
+    let wrapped_notice: Vec<String> = if completion.suggestions.is_empty() {
+        wrap_notice(
+            completion
+                .category_status
+                .as_deref()
+                .unwrap_or(if completion.needs_packs {
+                    "No matching packs."
+                } else {
+                    "No matching categories."
+                }),
+            inner.saturating_sub(2),
+        )
+    } else {
+        Vec::new()
+    };
     // Pack rows carry the price inside the description ("Name · Rs. 22.00").
     // Split it into its own column so prices line up across rows.
     let priced: Vec<(&str, &str)> = completion
         .suggestions
         .iter()
         .map(|item| match item.description.rfind(" · Rs. ") {
-            Some(at) => (&item.description[..at], &item.description[at + " · ".len()..]),
+            Some(at) => (
+                &item.description[..at],
+                &item.description[at + " · ".len()..],
+            ),
             None => (item.description.as_str(), ""),
         })
         .collect();
@@ -831,9 +918,11 @@ fn dropdown(
             } else {
                 clipped(price_text, price_width)
             };
-            let head_col = head_width.min(
-                rest.saturating_sub(if price.is_empty() { 0 } else { price_width + 2 }),
-            );
+            let head_col = head_width.min(rest.saturating_sub(if price.is_empty() {
+                0
+            } else {
+                price_width + 2
+            }));
             let head = clipped(head_text, head_col);
             let gap = if price.is_empty() {
                 String::new()
@@ -842,7 +931,11 @@ fn dropdown(
             };
             (head, gap, price)
         } else {
-            (clipped(&item.description, rest), String::new(), String::new())
+            (
+                clipped(&item.description, rest),
+                String::new(),
+                String::new(),
+            )
         };
         let price_pad = if price.is_empty() {
             String::new()
@@ -850,6 +943,12 @@ fn dropdown(
             " ".repeat(price_width.saturating_sub(width(&price)))
         };
         let tail = format!("{head}{gap}{price_pad}{price}");
+        let mut tail_colored = paint(MUTED, &head);
+        if !price.is_empty() {
+            tail_colored.push_str(&gap);
+            tail_colored.push_str(&price_pad);
+            tail_colored.push_str(&paint(MUTED, &price));
+        }
         let marker = if start + index == selected && !colors_enabled() {
             '❯'
         } else {
@@ -868,19 +967,11 @@ fn dropdown(
             selection(&padded)
         } else {
             format!(
-                " {} {}{}{}{}{}",
+                " {} {}{}{}{}",
                 paint(TEAL, &item.kind.to_string()),
                 paint(LAVENDER, &label),
                 " ".repeat(label_limit.saturating_sub(width(&label)) + 2),
-                paint(MUTED, &head),
-                format!(
-                    "{gap}{price_pad}{}",
-                    if price.is_empty() {
-                        String::new()
-                    } else {
-                        paint(MUTED, &price)
-                    }
-                ),
+                tail_colored,
                 " ".repeat(inner.saturating_sub(width(&text)))
             )
         };
@@ -891,18 +982,10 @@ fn dropdown(
         ));
     }
     for index in shown..slots {
-        let status = if completion.suggestions.is_empty() && index == 0 {
-            completion
-                .category_status
-                .as_deref()
-                .unwrap_or(if completion.needs_packs {
-                    "No matching packs."
-                } else {
-                    "No matching categories."
-                })
-        } else {
-            ""
-        };
+        let status = wrapped_notice
+            .get(index - shown)
+            .map(String::as_str)
+            .unwrap_or("");
         let text = clipped(&format!("  {status}"), inner);
         rows.push(format!(
             "{indent}{}{}{}{}",
