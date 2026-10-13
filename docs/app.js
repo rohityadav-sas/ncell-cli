@@ -8,7 +8,9 @@
   const scrim = $('#scrim');
   const menuBtn = $('#menu-btn');
   const navLinks = [...sidebar.querySelectorAll('a')];
-  const THEME_KEY = 'ncell-docs-theme';
+  const DOCS_NAME = root.dataset.docsName || 'ncell-cli';
+  const STORAGE_PREFIX = root.dataset.docsStorage || 'ncell-docs';
+  const THEME_KEY = STORAGE_PREFIX + '-theme';
   const SVG_NS = 'http://www.w3.org/2000/svg';
 
   function icon(name, extraClass = '') {
@@ -44,7 +46,7 @@
   syncThemeButton();
 
   /* ---------- Shared sidebar scroll position ---------- */
-  const SIDEBAR_SCROLL_KEY = 'ncell-docs-sidebar-scroll';
+  const SIDEBAR_SCROLL_KEY = STORAGE_PREFIX + '-sidebar-scroll';
   function saveSidebarScroll() {
     if (!sidebar.getClientRects().length) return;
     try { sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(sidebar.scrollTop)); } catch {}
@@ -117,25 +119,60 @@
   }
 
   /* ---------- Syntax colors (text nodes preserve copy and search text) ---------- */
-  const commandWords = new Set(('ncell winget scoop brew install bucket tap add login logout status balance profile account list switch remove plans categories search subscribe sms send-free game check-in claim-task math scratch spin ranks script create edit delete run help').split(' '));
+  const commandWords = new Set(
+    'ncell npm npx install add login logout status balance profile account list switch remove plans categories search subscribe sms send-free game check-in claim-task math scratch spin ranks script create edit delete run help'.split(
+      ' ',
+    ),
+  );
   function highlightCode(code, language) {
     const source = code.textContent;
     const output = language === 'Output';
     const json = language === 'JSON';
+    const typescript = language === 'TypeScript';
     const fragment = document.createDocumentFragment();
-    const tokens = /#[^\r\n]*|"(?:\\.|[^"\\])*"|'[^']*'|https?:\/\/[^\s]+|--?[a-zA-Z][\w-]*|<[^>\r\n]+>|\b[\w-]+(?:\.[\w-]+)+\b|\b\d+(?:[.,]\d+)*(?:s|m|h)?\b|\b[a-zA-Z][\w-]*\b/g;
+    const tokens =
+      /\/\/[^\r\n]*|\/\*[\s\S]*?\*\/|#[^\r\n]*|"(?:\\.|[^"\\])*"|'[^']*'|https?:\/\/[^\s]+|--?[a-zA-Z][\w-]*|<[^>\r\n]+>|\b[\w-]+(?:\.[\w-]+)+\b|\b\d+(?:[.,]\d+)*(?:s|m|h)?\b|\b[a-zA-Z][\w-]*\b/g;
     let offset = 0;
     for (const match of source.matchAll(tokens)) {
       const value = match[0];
       let kind = '';
-      if (!output && !json && value.startsWith('#')) kind = 'comment';
-      else if (/^["']/.test(value)) kind = json && /^\s*:/.test(source.slice(match.index + value.length)) ? 'key' : 'string';
+      if (!output && !json && (value.startsWith('#') || (typescript && value.startsWith('/'))))
+        kind = 'comment';
+      else if (/^["']/.test(value))
+        kind = json && /^\s*:/.test(source.slice(match.index + value.length)) ? 'key' : 'string';
       else if (/^https?:/.test(value)) kind = 'string';
       else if (!output && /^--?/.test(value)) kind = 'option';
       else if (!output && value.startsWith('<')) kind = 'parameter';
       else if (/^\d/.test(value)) kind = 'number';
       else if (!output && commandWords.has(value)) kind = 'command';
-      else if (['true', 'false', 'null'].includes(value)) kind = 'keyword';
+      else if (
+        [
+          'true',
+          'false',
+          'null',
+          ...(typescript
+            ? [
+                'import',
+                'from',
+                'export',
+                'default',
+                'const',
+                'let',
+                'new',
+                'await',
+                'async',
+                'return',
+                'if',
+                'else',
+                'try',
+                'catch',
+                'throw',
+                'instanceof',
+              ]
+            : []),
+        ].includes(value)
+      )
+        kind = 'keyword';
       fragment.append(document.createTextNode(source.slice(offset, match.index)));
       if (kind) {
         const span = document.createElement('span');
@@ -148,12 +185,19 @@
     fragment.append(document.createTextNode(source.slice(offset)));
     code.replaceChildren(fragment);
   }
-  article.querySelectorAll('code').forEach(code => {
+  article.querySelectorAll('code').forEach((code) => {
     highlightCode(code, code.closest('pre')?.dataset.lang || 'Shell');
   });
 
   /* ---------- Code blocks ---------- */
-  const langIcons = { Shell: 'terminal', PowerShell: 'terminal', JSON: 'braces', Output: 'file-text', Text: 'file-text' };
+  const langIcons = {
+    Shell: 'terminal',
+    PowerShell: 'terminal',
+    TypeScript: 'braces',
+    JSON: 'braces',
+    Output: 'file-text',
+    Text: 'file-text',
+  };
   for (const pre of article.querySelectorAll('pre')) {
     const label = pre.dataset.lang || 'Shell';
     const wrap = document.createElement('div');
@@ -347,7 +391,7 @@
       }
     }
     if (version !== routeVersion) return;
-    document.title = codesMode ? 'Response codes · ncell-cli' : 'ncell-cli documentation';
+    document.title = codesMode ? 'Response codes · ' + DOCS_NAME : DOCS_NAME + ' documentation';
     // Scroll within a view; fade between views after positioning the destination.
     const destination = document.getElementById(id);
     navigationTarget = codesMode || !destination ? null : spyTargets.findLast(target =>
