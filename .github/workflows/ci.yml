@@ -14,6 +14,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - run: python scripts/check-encoding.py
       - run: python scripts/build-docs.py
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings

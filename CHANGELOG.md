@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.3.1 — 2026-10-13
+## v0.3.1 â€” 2026-10-13
 
 - Restore the server sort field when browsing and searching plans so the full available catalog is returned.
 
