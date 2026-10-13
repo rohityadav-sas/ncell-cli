@@ -26,15 +26,22 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          gh release download v0.1.0 --repo rohityadav-sas/ncell-cli --pattern '*.zip' --dir smoke
+          $tag = (gh release view --repo rohityadav-sas/ncell-cli --json tagName --jq .tagName)
+          if ([string]::IsNullOrWhiteSpace($tag)) { throw 'Could not resolve latest release' }
+          $expected = $tag.TrimStart('v')
+          gh release download $tag --repo rohityadav-sas/ncell-cli --pattern '*windows-x86_64.zip' --dir smoke
           if ($LASTEXITCODE -ne 0) { throw 'Release download failed' }
           $manifest = Get-Content -Raw bucket/ncell-cli.json | ConvertFrom-Json
           $zip = Get-ChildItem smoke -Filter *.zip | Select-Object -First 1
-          $hash = (Get-FileHash -Algorithm SHA256 $zip.FullName).Hash.ToLowerInvariant()
-          if ($hash -ne $manifest.architecture.'64bit'.hash) { throw 'Release checksum mismatch' }
+          if ($manifest.version -eq $expected) {
+            $hash = (Get-FileHash -Algorithm SHA256 $zip.FullName).Hash.ToLowerInvariant()
+            if ($hash -ne $manifest.architecture.'64bit'.hash) { throw 'Release checksum mismatch' }
+          } else {
+            Write-Warning "Bucket manifest is $($manifest.version); skipping hash check for $tag"
+          }
           Expand-Archive $zip.FullName -DestinationPath smoke/extracted
           if (-not (Test-Path smoke/extracted/LICENSE)) { throw 'MIT license missing' }
           $version = & ./smoke/extracted/ncell.exe --version
-          if ($LASTEXITCODE -ne 0 -or $version -ne 'ncell 0.1.0') { throw 'Version check failed' }
+          if ($LASTEXITCODE -ne 0 -or $version -ne "ncell $expected") { throw 'Version check failed' }
           & ./smoke/extracted/ncell.exe --help
           if ($LASTEXITCODE -ne 0) { throw 'Help check failed' }
