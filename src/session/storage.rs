@@ -1,4 +1,4 @@
-use super::{Account, SavedAccount, Session};
+use super::Session;
 use crate::error::{Error, Result};
 
 pub trait SessionStore {
@@ -13,29 +13,7 @@ pub struct KeyringStore {
 }
 impl KeyringStore {
     pub fn new() -> Result<Self> {
-        #[cfg(not(target_os = "windows"))]
-        return Self::with_service("ncell-cli");
-        #[cfg(target_os = "windows")]
-        {
-            Self::with_migration("ncell-cli", "ncell-cli-v2")
-        }
-    }
-    #[cfg(target_os = "windows")]
-    fn with_migration(service: &str, old_service: &str) -> Result<Self> {
-        let store = Self::with_service(service)?;
-        if store
-            .read_index()?
-            .as_ref()
-            .and_then(|index| index["storage_version"].as_u64())
-            != Some(3)
-        {
-            let legacy = Self::with_service(old_service)?;
-            // Prefer the v2 accounts once, even when an older destination exists.
-            // Mark empty sessions too so removed accounts cannot reappear.
-            let session = merge_sessions(legacy.load()?, store.load()?).unwrap_or_default();
-            store.save(&session)?;
-        }
-        Ok(store)
+        Self::with_service("ncell-cli")
     }
     fn account_entry(&self, number: &str) -> Result<keyring::Entry> {
         keyring::Entry::new(&self.service, &format!("account-{number}")).map_err(|_| Error::Storage)

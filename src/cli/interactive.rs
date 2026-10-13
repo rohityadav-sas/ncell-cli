@@ -4,14 +4,16 @@ use super::{Args, Command, Runtime, run_with, script};
 use clap::Parser;
 use completion::{Completer, Completion, Suggestion};
 use crossterm::{
-    cursor::{MoveToColumn, MoveUp, Show},
+    cursor::{Hide, MoveToColumn, MoveUp, Show},
     event::{
         self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEvent, KeyEventKind,
         KeyModifiers,
     },
     execute, queue,
     style::ResetColor,
-    terminal::{self, Clear, ClearType},
+    terminal::{
+        self, BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate,
+    },
 };
 use ncell_cli::{
     error::{Error, Result},
@@ -799,10 +801,55 @@ fn dropdown(
         paint(BORDER, &format!("╭{}╮", "─".repeat(inner)))
     )];
     let label_limit = label_width.min(inner.saturating_sub(5));
+    // Pack rows carry the price inside the description ("Name · Rs. 22.00").
+    // Split it into its own column so prices line up across rows.
+    let priced: Vec<(&str, &str)> = completion
+        .suggestions
+        .iter()
+        .map(|item| match item.description.rfind(" · Rs. ") {
+            Some(at) => (&item.description[..at], &item.description[at + " · ".len()..]),
+            None => (item.description.as_str(), ""),
+        })
+        .collect();
+    let price_width = priced
+        .iter()
+        .map(|(_, price)| width(price))
+        .max()
+        .unwrap_or(0);
+    let head_width = priced
+        .iter()
+        .map(|(head, _)| width(head))
+        .max()
+        .unwrap_or(0);
     for (index, item) in items.iter().enumerate() {
         let label = clipped(&item.value, label_limit);
         let rest = inner.saturating_sub(label_limit + 5);
-        let description = clipped(&item.description, rest);
+        let (head_text, price_text) = priced[start + index];
+        let (head, gap, price) = if price_width > 0 && rest >= price_width + 2 {
+            let price = if price_text.is_empty() {
+                String::new()
+            } else {
+                clipped(price_text, price_width)
+            };
+            let head_col = head_width.min(
+                rest.saturating_sub(if price.is_empty() { 0 } else { price_width + 2 }),
+            );
+            let head = clipped(head_text, head_col);
+            let gap = if price.is_empty() {
+                String::new()
+            } else {
+                " ".repeat(head_col.saturating_sub(width(&head)) + 2)
+            };
+            (head, gap, price)
+        } else {
+            (clipped(&item.description, rest), String::new(), String::new())
+        };
+        let price_pad = if price.is_empty() {
+            String::new()
+        } else {
+            " ".repeat(price_width.saturating_sub(width(&price)))
+        };
+        let tail = format!("{head}{gap}{price_pad}{price}");
         let marker = if start + index == selected && !colors_enabled() {
             '❯'
         } else {
@@ -813,7 +860,7 @@ fn dropdown(
             marker,
             label,
             " ".repeat(label_limit.saturating_sub(width(&label)) + 2),
-            description
+            tail
         );
         let text = clipped(&text, inner);
         let padded = format!("{text}{}", " ".repeat(inner.saturating_sub(width(&text))));
@@ -821,11 +868,19 @@ fn dropdown(
             selection(&padded)
         } else {
             format!(
-                " {} {}{}{}{}",
+                " {} {}{}{}{}{}",
                 paint(TEAL, &item.kind.to_string()),
                 paint(LAVENDER, &label),
                 " ".repeat(label_limit.saturating_sub(width(&label)) + 2),
-                paint(MUTED, &description),
+                paint(MUTED, &head),
+                format!(
+                    "{gap}{price_pad}{}",
+                    if price.is_empty() {
+                        String::new()
+                    } else {
+                        paint(MUTED, &price)
+                    }
+                ),
                 " ".repeat(inner.saturating_sub(width(&text)))
             )
         };
@@ -935,10 +990,18 @@ fn draw(editor: &Editor, completion: &Completion, cache: &CategoryCache) -> io::
         usize::from(height).saturating_sub(hints.len() + 2),
     );
     rows.extend(hints);
-    let mut output = io::stdout();
-    queue!(output, MoveToColumn(0), Clear(ClearType::FromCursorDown))?;
+    // Paint the whole frame into a buffer and flush it in one write inside a
+    // synchronized update, so the terminal never shows a half-painted frame.
+    let mut frame: Vec<u8> = Vec::with_capacity(4096);
+    queue!(
+        frame,
+        BeginSynchronizedUpdate,
+        Hide,
+        MoveToColumn(0),
+        Clear(ClearType::FromCursorDown)
+    )?;
     write!(
-        output,
+        frame,
         "{}{}",
         paint(TEAL, &prompt),
         if editor.all_selected {
@@ -948,16 +1011,19 @@ fn draw(editor: &Editor, completion: &Completion, cache: &CategoryCache) -> io::
         }
     )?;
     for row in &rows {
-        write!(output, "\r\n{row}")?;
+        write!(frame, "\r\n{row}")?;
     }
     if !rows.is_empty() {
-        queue!(output, MoveUp(rows.len() as u16))?;
+        queue!(frame, MoveUp(rows.len() as u16))?;
     }
     queue!(
-        output,
+        frame,
         MoveToColumn((prompt_width + width(&editor.input[offset..editor.cursor])) as u16),
-        Show
+        Show,
+        EndSynchronizedUpdate
     )?;
+    let mut output = io::stdout().lock();
+    output.write_all(&frame)?;
     output.flush()
 }
 

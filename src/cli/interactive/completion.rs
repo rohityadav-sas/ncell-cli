@@ -679,6 +679,7 @@ pub(super) fn merge_fetched_packs(
                 .or_else(|| pack["productName"].as_str())
                 .unwrap_or("Pack");
             let price = pack["productOfferingPrice"]["price"].as_str().unwrap_or("");
+            let price = price.strip_suffix(".00").unwrap_or(price);
             let mut item = Suggestion::new(
                 id.to_string(),
                 if price.is_empty() {
