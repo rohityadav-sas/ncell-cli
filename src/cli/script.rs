@@ -27,15 +27,15 @@ pub(super) fn emit_json(result: Value) {
 
 #[derive(Subcommand, Clone)]
 pub(super) enum ScriptCommand {
-    /// Save an example in the CLI library and open it in your editor.
+    /// Create a script
     Create { file: PathBuf },
-    /// Open a saved script in your editor.
+    /// Open a script
     Edit { file: PathBuf },
-    /// Delete a script saved in the CLI library.
+    /// Delete a script
     Delete { file: PathBuf },
-    /// List scripts saved in the CLI.
+    /// List saved scripts
     List,
-    /// Validate a command file, then run its commands in order.
+    /// Run a script
     Run { file: PathBuf },
 }
 const EXAMPLE: &str = r#"# Daily rewards
@@ -77,7 +77,7 @@ fn fail(message: impl std::fmt::Display) -> Error {
     Error::Script(message.to_string())
 }
 
-fn script_directory() -> Result<PathBuf> {
+pub(super) fn script_directory() -> Result<PathBuf> {
     #[cfg(target_os = "windows")]
     let base = std::env::var_os("APPDATA").map(PathBuf::from);
     #[cfg(target_os = "macos")]
@@ -177,7 +177,7 @@ fn edit_script(file: &std::path::Path, json_output: bool) -> Result<()> {
 }
 
 // Shell-free quoting: backslashes are literal, including in Windows paths.
-fn words(line: &str) -> std::result::Result<Vec<String>, String> {
+pub(super) fn words(line: &str) -> std::result::Result<Vec<String>, String> {
     let mut words = Vec::new();
     let mut word = String::new();
     let mut quote = None;
@@ -233,8 +233,10 @@ fn parse(source: &str) -> Result<Vec<Step>> {
         }
         let args = Args::try_parse_from(std::iter::once("ncell".to_owned()).chain(words.clone()))
             .map_err(|e| error(e.to_string()))?;
-        if matches!(args.command, Command::Script { .. }) {
-            return Err(error("Nested script commands are not supported".into()));
+        if matches!(args.command, Command::Script { .. } | Command::Interactive) {
+            return Err(error(
+                "Nested script or interactive commands are not supported".into(),
+            ));
         }
         validate_args(&args).map_err(error)?;
         steps.push(Step {

@@ -19,12 +19,14 @@ path = "src/main.rs"
 anstream = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 clap = { version = "4", features = ["derive"] }
+crossterm = "0.29"
 fasteval = "0.2"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "cookies", "json", "multipart", "rustls-tls"] }
 scraper = { version = "0.24", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+unicode-width = "0.2"
 uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]

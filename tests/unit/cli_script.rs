@@ -43,6 +43,8 @@ fn validates_every_line_before_execution() {
     for bad in [
         "script run other",
         "script create other",
+        "interactive",
+        "ncell interactive --json",
         "balance | more",
         "balance > file",
         "$(bad)",

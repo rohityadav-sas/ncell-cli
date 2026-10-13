@@ -1,3 +1,4 @@
+mod interactive;
 mod script;
 use clap::builder::styling::{AnsiColor, Style};
 use clap::{Parser, Subcommand};
@@ -21,13 +22,13 @@ use std::time::{Duration, Instant};
     disable_version_flag = true
 )]
 pub struct Args {
-    /// Print help.
+    /// Print help
     #[arg(long, global = true, action = clap::ArgAction::Help)]
     pub help: Option<bool>,
-    /// Print version.
+    /// Print version
     #[arg(long, action = clap::ArgAction::Version)]
     pub version: Option<bool>,
-    /// Print structured JSON output.
+    /// Print structured JSON output
     #[arg(long, global = true)]
     pub json: bool,
     #[command(subcommand)]
@@ -36,41 +37,43 @@ pub struct Args {
 
 #[derive(Subcommand, Clone)]
 enum Command {
-    /// Create, manage and run saved command scripts.
+    /// Open an interactive command editor with live suggestions.
+    Interactive,
+    /// Manage reusable scripts
     Script {
         #[command(subcommand)]
         action: script::ScriptCommand,
     },
-    /// Request an SMS code and log in. Use --verify to resume a pending login.
+    /// Request an OTP and log in. Use --verify to resume a pending login
     Login {
         number: String,
         #[arg(long)]
         verify: bool,
     },
-    /// List saved accounts or switch the active account.
+    /// Manage saved accounts
     Account {
         #[command(subcommand)]
         action: AccountCommand,
     },
-    /// Show local session status (does not check token validity).
+    /// Show local session status
     Status,
-    /// Remove the active account locally. Does not revoke server tokens.
+    /// Remove the active account
     Logout,
-    /// Query credit, data, voice and SMS balances.
+    /// Query balance, data, voice and SMS
     Balance,
-    /// Query the subscriber profile; use --json for all details.
+    /// Owner Information
     Profile,
-    /// Game status, rewards and leaderboard.
+    /// Game status, rewards and leaderboard
     Game {
         #[command(subcommand)]
         action: GameCommand,
     },
-    /// Send SMS messages.
+    /// Send SMS
     Sms {
         #[command(subcommand)]
         action: SmsCommand,
     },
-    /// Browse, search and subscribe to plans.
+    /// Browse, search and subscribe to plans
     #[command(args_conflicts_with_subcommands = true)]
     Plans {
         #[command(flatten)]
@@ -78,23 +81,23 @@ enum Command {
         #[command(subcommand)]
         action: Option<PlanCommand>,
     },
-    /// Rotate saved tokens. Synchronize them to any app sharing this session.
+    /// Rotate tokens
     Refresh,
 }
 
 #[derive(Subcommand, Clone)]
 enum AccountCommand {
-    /// Save an account without switching. Use --verify to resume its pending login.
+    /// Save an account without switching
     Add {
         number: String,
         #[arg(long)]
         verify: bool,
     },
-    /// Remove a specific saved account locally.
+    /// Remove a saved account locally
     Remove { number: String },
-    /// List saved accounts.
+    /// List saved accounts
     List,
-    /// Switch to a saved account without requesting an OTP.
+    /// Switch to a saved account
     Switch { number: String },
 }
 
@@ -102,22 +105,22 @@ enum AccountCommand {
 struct PlanOptions {
     #[arg(long, default_value_t = DEFAULT_PLAN_CATEGORY)]
     category: u64,
-    /// Ordered fields: price or validity, optionally followed by :asc or :desc.
+    /// Sort by a column
     #[arg(long, value_delimiter = ',', value_parser = parse_sort, default_value = "price", value_name = "FIELD[:asc|desc],...")]
     sort: Vec<(Sort, bool)>,
 }
 
 #[derive(Subcommand, Clone)]
 enum PlanCommand {
-    /// List catalog categories.
+    /// List plans categories
     Categories,
-    /// Search plans on the server within a catalog category.
+    /// Search plans within a category
     Search {
         keyword: String,
         #[command(flatten)]
         options: PlanOptions,
     },
-    /// Subscribe to a listed plan. Paid packs charge your Ncell account.
+    /// Subscribe to a plan
     Subscribe {
         id: String,
         #[arg(long, default_value_t = DEFAULT_PLAN_CATEGORY)]
@@ -127,25 +130,25 @@ enum PlanCommand {
 
 #[derive(Subcommand, Clone)]
 enum SmsCommand {
-    /// Send a free SMS to a Nepal mobile number.
+    /// Send a free SMS to a Ncell number
     SendFree { number: String, text: String },
 }
 
 #[derive(Subcommand, Clone)]
 enum GameCommand {
-    /// Spin the wheel. Each spin costs game tokens; stops on the first failure.
+    /// Play spin game
     Spin(GamePlayOptions),
-    /// Scratch a card. Each card costs game tokens; stops on the first failure.
+    /// Play scratch game
     Scratch(GamePlayOptions),
-    /// Automatically solve a math challenge. Each game costs game tokens.
+    /// Play math game
     Math(GamePlayOptions),
-    /// Show weekly ranks, performance and prizes.
+    /// Show weekly ranks, performance and prizes
     Ranks,
-    /// List game tasks, rewards and current progress.
+    /// List game tasks, rewards and current progress
     Status,
-    /// Claim the daily check-in reward.
+    /// Claim daily check-in reward
     CheckIn,
-    /// Claim tasks by ID, or all completed unclaimed tasks.
+    /// Claim tasks
     ClaimTask {
         #[arg(required = true, value_delimiter = ',', num_args = 1.., value_parser = parse_task_id)]
         ids: Vec<String>,
@@ -154,10 +157,10 @@ enum GameCommand {
 
 #[derive(clap::Args, Clone)]
 struct GamePlayOptions {
-    /// Number of games to play, or all until tokens are insufficient.
+    /// Number of games to play
     #[arg(long, default_value = "1", value_parser = parse_count)]
     count: String,
-    /// Wait between games: seconds by default, or use s, m, h (e.g. 1.5s).
+    /// Delay between games: seconds by default, or use s, m, h (e.g. 1.5m)
     #[arg(long, default_value = "0", value_parser = parse_delay)]
     delay: Duration,
 }
@@ -214,7 +217,7 @@ fn claimable_ids(response: &Value) -> Result<Vec<u64>> {
         .collect()
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, clap::ValueEnum)]
 enum Sort {
     Price,
     Validity,
@@ -222,11 +225,8 @@ enum Sort {
 
 fn parse_sort(value: &str) -> std::result::Result<(Sort, bool), String> {
     let (field, direction) = value.split_once(':').unwrap_or((value, "asc"));
-    let field = match field {
-        "price" => Sort::Price,
-        "validity" => Sort::Validity,
-        _ => return Err("Sort field must be price or validity".into()),
-    };
+    let field = <Sort as clap::ValueEnum>::from_str(field, false)
+        .map_err(|_| "Sort field must be price or validity".to_owned())?;
     match direction {
         "asc" => Ok((field, false)),
         "desc" => Ok((field, true)),
@@ -316,6 +316,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
         runtime.game = None;
     }
     match args.command {
+        Command::Interactive => return interactive::run(runtime, args.json),
         Command::Script { action } => return script::run(action, args.json, runtime),
         Command::Game { action } => {
             let game = runtime.game()?;
@@ -587,7 +588,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
             output(
                 args.json,
                 json!({"refreshed": true, "session_saved": true, "mobile_sync_required": true}),
-                "Refreshed tokens saved in your system credential store.\nIf this session is shared with the app, synchronize the rotated tokens back.",
+                "Tokens refreshed.",
             );
         }
         Command::Login { number, verify } => {

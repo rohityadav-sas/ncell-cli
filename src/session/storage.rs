@@ -1,4 +1,4 @@
-use super::Session;
+use super::{Account, SavedAccount, Session};
 use crate::error::{Error, Result};
 
 pub trait SessionStore {
@@ -32,7 +32,7 @@ impl KeyringStore {
             let legacy = Self::with_service(old_service)?;
             // Prefer the v2 accounts once, even when an older destination exists.
             // Mark empty sessions too so removed accounts cannot reappear.
-            let session = legacy.load()?.or(store.load()?).unwrap_or_default();
+            let session = merge_sessions(legacy.load()?, store.load()?).unwrap_or_default();
             store.save(&session)?;
         }
         Ok(store)
