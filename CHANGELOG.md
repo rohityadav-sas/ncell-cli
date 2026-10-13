@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.1 — 2026-10-13
+
+- Restore the server sort field when browsing and searching plans so the full available catalog is returned.
+
 ## v0.2.0 â€” 2026-10-12
 
 - Add, list, switch and remove saved accounts without logging in again.

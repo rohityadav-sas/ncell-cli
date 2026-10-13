@@ -1414,7 +1414,7 @@ dependencies = [
 
 [[package]]
 name = "ncell-cli"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anstream",
  "chrono",

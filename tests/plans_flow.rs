@@ -8,10 +8,12 @@ fn search_sends_keyword_to_server_without_extra_metadata() {
     let request = server
         .mock("POST", "/v1.0/product/data-plans")
         .match_header("authorization", "Bearer test-token")
-        .match_body(Matcher::PartialJson(json!({"keyword":"Super", "tagId":66})))
+        .match_body(Matcher::PartialJson(
+            json!({"keyword":"Super", "tagId":66, "sortby":{"name":"price","isDescending":false}}),
+        ))
         .match_request(|r| {
             let body: Value = serde_json::from_slice(r.body().unwrap()).unwrap();
-            body.as_object().unwrap().len() == 5
+            body.as_object().unwrap().len() == 6
                 && body["requestHeader"].as_object().unwrap().len() == 10
         })
         .with_body(r#"{"responseHeader":{"responseCode":"200"},"availablePackages":[]}"#)
@@ -46,9 +48,9 @@ fn plans_preserve_catalog_selection_and_reject_missing_packages() {
             })))
             .match_request(|r| {
                 let body: Value = serde_json::from_slice(r.body().unwrap()).unwrap();
-                body.as_object().unwrap().len() == 4
+                body.as_object().unwrap().len() == 5
                     && body["requestHeader"].as_object().unwrap().len() == 10
-                    && body.get("sortby").is_none()
+                    && body["sortby"] == json!({"name":"price","isDescending":false})
             })
             .with_status(200)
             .with_body(response.to_string())
@@ -88,7 +90,9 @@ fn tags_omit_version_and_route_sms_and_voice_without_data_fallback() {
     for (tag, catalog) in [(50, "sms"), (61, "voice")] {
         let request = server
             .mock("POST", format!("/v1.0/product/{catalog}-plans").as_str())
-            .match_body(Matcher::PartialJson(json!({"tagId":tag})))
+            .match_body(Matcher::PartialJson(
+                json!({"tagId":tag,"sortby":{"name":"price","isDescending":false}}),
+            ))
             .with_body(r#"{"responseHeader":{"responseCode":"200"},"availablePackages":[]}"#)
             .create();
         client.plans("9812345678", "test-token", tag).unwrap();

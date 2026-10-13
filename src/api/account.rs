@@ -154,6 +154,7 @@ impl Client {
             "msisdn": msisdn,
             "languageCode": "1",
             "tagId": category,
+            "sortby": {"name": "price", "isDescending": false},
             "requestHeader": request_header(msisdn, "SHOP"),
         });
         if !keyword.is_empty() {
