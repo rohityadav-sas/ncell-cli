@@ -198,6 +198,13 @@ pub(super) fn welcome(columns: usize) -> String {
 }
 
 type PanicHook = Arc<dyn Fn(&std::panic::PanicHookInfo<'_>) + Send + Sync>;
+
+/// Mouse capture (for wheel scrolling) is opt-in: while captured, the
+/// terminal passes mouse events to the app and normal drag-selection stops.
+/// Set NCELL_MOUSE=1 to enable it; otherwise scroll with PageUp/PageDown.
+fn mouse_capture() -> bool {
+    std::env::var_os("NCELL_MOUSE").is_some()
+}
 struct TerminalGuard {
     active: bool,
     previous_hook: Option<PanicHook>,
@@ -229,20 +236,21 @@ impl TerminalGuard {
     fn resume(&mut self) -> io::Result<()> {
         terminal::enable_raw_mode()?;
         self.active = true;
-        execute!(io::stdout(), EnableBracketedPaste, EnableMouseCapture, Show)
+        execute!(io::stdout(), EnableBracketedPaste, Show)?;
+        if mouse_capture() {
+            execute!(io::stdout(), EnableMouseCapture)?;
+        }
+        Ok(())
     }
     fn pause(&mut self) -> io::Result<()> {
         if self.active {
             // Disable mouse capture BEFORE raw mode: mouse capture restores
             // the console mode snapshotted while raw was on, so doing it last
             // would switch raw mode back on.
-            execute!(
-                io::stdout(),
-                ResetColor,
-                Show,
-                DisableBracketedPaste,
-                DisableMouseCapture
-            )?;
+            execute!(io::stdout(), ResetColor, Show, DisableBracketedPaste)?;
+            if mouse_capture() {
+                execute!(io::stdout(), DisableMouseCapture)?;
+            }
             terminal::disable_raw_mode()?;
             self.active = false;
         }
