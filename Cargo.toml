@@ -20,6 +20,7 @@ anstream = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.29"
+ctrlc = "3.5.2"
 fasteval = "0.2"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "cookies", "json", "multipart", "rustls-tls"] }
 scraper = { version = "0.24", default-features = false }
