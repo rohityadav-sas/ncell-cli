@@ -207,7 +207,6 @@ impl TerminalGuard {
         let previous_hook: PanicHook = std::panic::take_hook().into();
         let panic_hook = previous_hook.clone();
         std::panic::set_hook(Box::new(move |info| {
-            let _ = terminal::disable_raw_mode();
             let _ = execute!(
                 io::stdout(),
                 ResetColor,
@@ -216,6 +215,7 @@ impl TerminalGuard {
                 DisableMouseCapture,
                 LeaveAlternateScreen
             );
+            let _ = terminal::disable_raw_mode();
             panic_hook(info);
         }));
         let mut guard = Self {
@@ -233,8 +233,9 @@ impl TerminalGuard {
     }
     fn pause(&mut self) -> io::Result<()> {
         if self.active {
-            terminal::disable_raw_mode()?;
-            self.active = false;
+            // Disable mouse capture BEFORE raw mode: mouse capture restores
+            // the console mode snapshotted while raw was on, so doing it last
+            // would switch raw mode back on.
             execute!(
                 io::stdout(),
                 ResetColor,
@@ -242,6 +243,8 @@ impl TerminalGuard {
                 DisableBracketedPaste,
                 DisableMouseCapture
             )?;
+            terminal::disable_raw_mode()?;
+            self.active = false;
         }
         Ok(())
     }
