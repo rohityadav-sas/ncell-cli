@@ -4,7 +4,7 @@ use super::{Args, Command, Runtime, run_with, script};
 use clap::Parser;
 use completion::{Completer, Completion, Suggestion};
 use crossterm::{
-    cursor::{Hide, MoveTo, MoveToColumn, MoveUp, Show},
+    cursor::{Hide, MoveTo, MoveToColumn, MoveUp, RestorePosition, SavePosition, Show},
     event::{
         self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEvent, KeyEventKind,
         KeyModifiers,
@@ -1163,6 +1163,9 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
         ));
     }
     let mut guard = TerminalGuard::enter().map_err(fail)?;
+    // Remember where the session started so exit can erase exactly the
+    // session region without touching the outer shell above it.
+    execute!(io::stdout(), SavePosition).map_err(fail)?;
     // Fresh viewport on entry so the first frame matches a cleared screen.
     // Spaces keep the outer shell in the scrollback instead of erasing it.
     clear_viewport().map_err(fail)?;
@@ -1242,7 +1245,13 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
             continue;
         }
         if action == Action::Exit {
-            clear_viewport().map_err(fail)?;
+            queue!(
+                io::stdout(),
+                RestorePosition,
+                MoveToColumn(0),
+                Clear(ClearType::FromCursorDown)
+            )
+            .map_err(fail)?;
             guard.pause().map_err(fail)?;
             return Ok(());
         }
