@@ -1,6 +1,6 @@
 mod completion;
 
-use super::{Args, Command, Runtime, script};
+use super::{Args, Command, Runtime, run_with, script};
 use clap::Parser;
 use completion::{Completer, Completion, Suggestion};
 use crossterm::{
@@ -1332,6 +1332,20 @@ fn draw(
     output.flush()
 }
 
+/// Commands that prompt on the terminal (OTP, editors) run in-process.
+/// A captured child cannot reliably read interactive input, so these keep
+/// the proven direct-terminal flow while everything else streams captured.
+fn runs_locally(command: &Command) -> bool {
+    matches!(
+        command,
+        Command::Login { .. }
+            | Command::Account {
+                action: super::AccountCommand::Add { .. }
+            }
+            | Command::Script { .. }
+    )
+}
+
 fn parse_line(input: &str) -> std::result::Result<Args, ParseError> {
     let mut words = script::words(input).map_err(ParseError::Message)?;
     if words.first().is_some_and(|word| word == "ncell") {
@@ -1535,13 +1549,33 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
                         ..
                     }
                 );
-                let mut words = script::words(&editor.input).unwrap_or_default();
-                if words.first().is_some_and(|word| word == "ncell") {
-                    words.remove(0);
-                }
-                guard.pause().map_err(fail)?;
-                if let Err(error) = run_captured(&words, &mut transcript) {
-                    transcript.push_str(&format!("Error: {error}\n"));
+                if runs_locally(&args.command) {
+                    guard.pause().map_err(fail)?;
+                    println!("{}{}\n", paint(TEAL, PROMPT), command_colors(&editor.input));
+                    let json = args.json;
+                    if let Err(error) = run_with(args, runtime) {
+                        if json {
+                            if let Error::Api { response, .. }
+                            | Error::CheckIn { response, .. }
+                            | Error::GameTasks { response } = &error
+                            {
+                                println!("{response:#}");
+                            } else {
+                                println!("{:#}", serde_json::json!({"error":error.to_string()}));
+                            }
+                        } else if !matches!(error, Error::GameLost) {
+                            eprintln!("Error: {error}");
+                        }
+                    }
+                } else {
+                    let mut words = script::words(&editor.input).unwrap_or_default();
+                    if words.first().is_some_and(|word| word == "ncell") {
+                        words.remove(0);
+                    }
+                    guard.pause().map_err(fail)?;
+                    if let Err(error) = run_captured(&words, &mut transcript) {
+                        transcript.push_str(&format!("Error: {error}\n"));
+                    }
                 }
                 if invalidate {
                     categories.invalidate();

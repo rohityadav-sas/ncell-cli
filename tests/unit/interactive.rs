@@ -169,6 +169,29 @@ fn arrows_do_nothing_without_suggestions_and_ignore_key_release_events() {
 }
 
 #[test]
+fn prompting_commands_run_in_process() {
+    for input in [
+        "login 9812345678",
+        "ncell login 9812345678 --verify",
+        "account add 9812345678",
+        "script run daily.ncell",
+    ] {
+        let args = match parse_line(input) {
+            Ok(args) => args,
+            Err(_) => panic!("parse failed: {input}"),
+        };
+        assert!(runs_locally(&args.command), "{input}");
+    }
+    for input in ["status", "balance", "game spin", "docs", "plans"] {
+        let args = match parse_line(input) {
+            Ok(args) => args,
+            Err(_) => panic!("parse failed: {input}"),
+        };
+        assert!(!runs_locally(&args.command), "{input}");
+    }
+}
+
+#[test]
 fn parsing_uses_real_clap_and_shell_free_script_tokenizer() {
     assert!(parse_line("sms send-free 9812345678 \"नमस्ते 👋\"").is_ok());
     assert!(parse_line("ncell game spin --count all").is_ok());
