@@ -1,17 +1,20 @@
 mod completion;
 
-use super::{Args, Command, Runtime, run_with, script};
+use super::{Args, Command, Runtime, script};
 use clap::Parser;
 use completion::{Completer, Completion, Suggestion};
 use crossterm::{
-    cursor::{Hide, MoveTo, MoveToColumn, MoveUp, Show, position},
+    cursor::{Hide, MoveTo, Show},
     event::{
-        self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEvent, KeyEventKind,
-        KeyModifiers,
+        self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+        Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEventKind,
     },
     execute, queue,
     style::ResetColor,
-    terminal::{self, BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate},
+    terminal::{
+        self, BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate,
+        EnterAlternateScreen, LeaveAlternateScreen,
+    },
 };
 use ncell_cli::{
     auth::AuthService,
@@ -20,6 +23,7 @@ use ncell_cli::{
 };
 use std::{
     io::{self, IsTerminal, Write},
+    process::Stdio,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -203,26 +207,40 @@ impl TerminalGuard {
         let panic_hook = previous_hook.clone();
         std::panic::set_hook(Box::new(move |info| {
             let _ = terminal::disable_raw_mode();
-            let _ = execute!(io::stdout(), ResetColor, Show, DisableBracketedPaste);
+            let _ = execute!(
+                io::stdout(),
+                ResetColor,
+                Show,
+                DisableBracketedPaste,
+                DisableMouseCapture,
+                LeaveAlternateScreen
+            );
             panic_hook(info);
         }));
         let mut guard = Self {
             active: false,
             previous_hook: Some(previous_hook),
         };
+        execute!(io::stdout(), EnterAlternateScreen)?;
         guard.resume()?;
         Ok(guard)
     }
     fn resume(&mut self) -> io::Result<()> {
         terminal::enable_raw_mode()?;
         self.active = true;
-        execute!(io::stdout(), EnableBracketedPaste, Show)
+        execute!(io::stdout(), EnableBracketedPaste, EnableMouseCapture, Show)
     }
     fn pause(&mut self) -> io::Result<()> {
         if self.active {
             terminal::disable_raw_mode()?;
             self.active = false;
-            execute!(io::stdout(), ResetColor, Show, DisableBracketedPaste)?;
+            execute!(
+                io::stdout(),
+                ResetColor,
+                Show,
+                DisableBracketedPaste,
+                DisableMouseCapture
+            )?;
         }
         Ok(())
     }
@@ -230,6 +248,7 @@ impl TerminalGuard {
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
         let _ = self.pause();
+        let _ = execute!(io::stdout(), LeaveAlternateScreen);
         if let Some(previous) = self.previous_hook.take()
             && !std::thread::panicking()
         {
@@ -435,24 +454,192 @@ fn trace(marker: &str) {
         let _ = writeln!(file, "{marker}");
     }
 }
-/// Scroll everything currently on screen into the scrollback, then park at
-/// the top-left of a blank viewport. Nothing is erased, so outer shell
-/// history and this session's output both stay scrollable.
-fn scroll_off() -> io::Result<()> {
-    let (_, rows) = terminal::size().unwrap_or((80, 24));
-    let used = position()
-        .map_or(rows, |(_, row)| row.saturating_add(1))
-        .min(rows);
-    let mut output = io::stdout();
+#[derive(Default)]
+struct Transcript {
+    lines: Vec<String>,
+    current: String,
+    pending_cr: bool,
+    scroll: usize,
+}
+impl Transcript {
+    fn push_str(&mut self, text: &str) {
+        for ch in text.chars() {
+            if self.pending_cr {
+                self.pending_cr = false;
+                if ch != '\n' {
+                    self.current.clear();
+                }
+            }
+            match ch {
+                '\n' => self.lines.push(std::mem::take(&mut self.current)),
+                '\r' => self.pending_cr = true,
+                '\t' => self.current.push_str("    "),
+                c if c.is_control() && c != '\x1b' => {}
+                c => self.current.push(c),
+            }
+        }
+        self.scroll = 0;
+        if self.lines.len() > 5000 {
+            let extra = self.lines.len() - 5000;
+            self.lines.drain(..extra);
+        }
+    }
+    fn visible(&self, rows: usize, running: bool) -> Vec<&str> {
+        let mut all: Vec<&str> = self.lines.iter().map(String::as_str).collect();
+        if running || !self.current.is_empty() {
+            all.push(&self.current);
+        }
+        let end = all
+            .len()
+            .saturating_sub(self.scroll.min(all.len().saturating_sub(rows)));
+        all[end.saturating_sub(rows)..end].to_vec()
+    }
+    fn scroll_by(&mut self, delta: isize, rows: usize) {
+        let max = self.lines.len().saturating_sub(rows);
+        self.scroll = self.scroll.saturating_add_signed(delta).min(max);
+    }
+}
+
+fn view_height() -> usize {
+    usize::from(terminal::size().unwrap_or((80, 24)).1)
+        .saturating_sub(1)
+        .max(1)
+}
+fn banner() -> String {
+    format!(
+        "{}\n",
+        welcome(usize::from(terminal::size().unwrap_or((80, 24)).0))
+    )
+}
+
+/// Clip to `available` cells, keeping only color (SGR) sequences.
+fn clip_ansi(line: &str, available: usize) -> (String, usize) {
+    let mut out = String::new();
+    let mut used = 0;
+    let mut chars = line.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' {
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                let mut sequence = String::from("\x1b[");
+                for next in chars.by_ref() {
+                    sequence.push(next);
+                    if ('@'..='~').contains(&next) {
+                        break;
+                    }
+                }
+                if sequence.ends_with('m') {
+                    out.push_str(&sequence);
+                }
+            }
+            continue;
+        }
+        let cells = ch.width().unwrap_or(0);
+        if used + cells > available {
+            break;
+        }
+        used += cells;
+        out.push(ch);
+    }
+    out.push_str("\x1b[0m");
+    (out, used)
+}
+
+fn pump(mut pipe: impl io::Read + Send + 'static, sender: mpsc::Sender<String>) {
+    std::thread::spawn(move || {
+        let mut pending: Vec<u8> = Vec::new();
+        let mut buffer = [0u8; 4096];
+        loop {
+            let read = match pipe.read(&mut buffer) {
+                Ok(0) | Err(_) => break,
+                Ok(read) => read,
+            };
+            pending.extend_from_slice(&buffer[..read]);
+            let valid = match std::str::from_utf8(&pending) {
+                Ok(_) => pending.len(),
+                Err(error) => error.valid_up_to(),
+            };
+            if valid > 0 {
+                let text = String::from_utf8_lossy(&pending[..valid]).into_owned();
+                pending.drain(..valid);
+                if sender.send(text).is_err() {
+                    break;
+                }
+            }
+            if pending.len() > 8 {
+                pending.clear();
+            }
+        }
+    });
+}
+
+/// Paint only the transcript (used while a command is running).
+fn draw_output(transcript: &Transcript) -> io::Result<()> {
+    let (columns, height) = terminal::size().unwrap_or((80, 24));
+    let (columns, height) = (usize::from(columns), usize::from(height).max(1));
+    let shown = transcript.visible(height, true);
+    let mut frame: Vec<u8> = Vec::with_capacity(4096);
     queue!(
-        output,
-        MoveToColumn(0),
-        Clear(ClearType::FromCursorDown),
-        MoveTo(0, rows.saturating_sub(1))
+        frame,
+        BeginSynchronizedUpdate,
+        Hide,
+        MoveTo(0, 0),
+        Clear(ClearType::All)
     )?;
-    write!(output, "{}", "\n".repeat(usize::from(used)))?;
-    queue!(output, MoveTo(0, 0))?;
+    let mut cursor = 0;
+    for (row, line) in shown.iter().enumerate() {
+        let (text, used) = clip_ansi(line, columns);
+        queue!(frame, MoveTo(0, row as u16))?;
+        write!(frame, "{text}")?;
+        cursor = used;
+    }
+    queue!(
+        frame,
+        MoveTo(
+            cursor.min(columns.saturating_sub(1)) as u16,
+            shown.len().saturating_sub(1) as u16
+        ),
+        Show,
+        EndSynchronizedUpdate
+    )?;
+    let mut output = io::stdout().lock();
+    output.write_all(&frame)?;
     output.flush()
+}
+
+/// Run one command as a child process and stream its output into the transcript.
+fn run_captured(words: &[String], transcript: &mut Transcript) -> io::Result<()> {
+    let mut command = std::process::Command::new(std::env::current_exe()?);
+    command
+        .args(words)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if colors_enabled() {
+        command.env("CLICOLOR_FORCE", "1");
+    }
+    let mut child = command.spawn()?;
+    let (sender, receiver) = mpsc::channel();
+    if let Some(pipe) = child.stdout.take() {
+        pump(pipe, sender.clone());
+    }
+    if let Some(pipe) = child.stderr.take() {
+        pump(pipe, sender.clone());
+    }
+    drop(sender);
+    draw_output(transcript)?;
+    loop {
+        match receiver.recv_timeout(Duration::from_millis(50)) {
+            Ok(chunk) => {
+                transcript.push_str(&chunk);
+                draw_output(transcript)?;
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+    child.wait()?;
+    Ok(())
 }
 fn suggestion_shortcut(key: KeyEvent) -> bool {
     matches!(key.code, KeyCode::Null | KeyCode::Char('\0'))
@@ -1027,9 +1214,16 @@ fn dropdown(
     rows
 }
 
-fn draw(editor: &Editor, completion: &Completion, cache: &CategoryCache) -> io::Result<()> {
+fn draw(
+    editor: &Editor,
+    completion: &Completion,
+    cache: &CategoryCache,
+    transcript: &Transcript,
+) -> io::Result<()> {
     let (columns, height) = terminal::size().unwrap_or((80, 24));
-    let columns = usize::from(columns).saturating_sub(1).max(1);
+    let height = usize::from(height);
+    let full_width = usize::from(columns);
+    let columns = full_width.saturating_sub(1).max(1);
     let prompt = clipped(PROMPT, columns.saturating_sub(1));
     let prompt_width = width(&prompt);
     let available = columns.saturating_sub(prompt_width).max(1);
@@ -1068,26 +1262,35 @@ fn draw(editor: &Editor, completion: &Completion, cache: &CategoryCache) -> io::
             paint("232;179;115", &clipped(message, available))
         ));
     }
-    hints.truncate(usize::from(height).saturating_sub(2));
+    hints.truncate(height.saturating_sub(2));
     let mut rows = dropdown(
         &panel,
         editor.selected,
         &editor.input,
         offset,
         columns,
-        usize::from(height).saturating_sub(hints.len() + 2),
+        height.saturating_sub(hints.len() + 2),
     );
     rows.extend(hints);
-    // Paint the whole frame into a buffer and flush it in one write inside a
-    // synchronized update, so the terminal never shows a half-painted frame.
+    rows.truncate(height.saturating_sub(1));
+    // The transcript fills whatever the prompt and dropdown don't need.
+    let view_rows = height.saturating_sub(1 + rows.len()).max(1);
+    let shown = transcript.visible(view_rows, false);
+    let prompt_row = shown.len();
+
     let mut frame: Vec<u8> = Vec::with_capacity(4096);
     queue!(
         frame,
         BeginSynchronizedUpdate,
         Hide,
-        MoveToColumn(0),
-        Clear(ClearType::FromCursorDown)
+        MoveTo(0, 0),
+        Clear(ClearType::All)
     )?;
+    for (row, line) in shown.iter().enumerate() {
+        queue!(frame, MoveTo(0, row as u16))?;
+        write!(frame, "{}", clip_ansi(line, full_width).0)?;
+    }
+    queue!(frame, MoveTo(0, prompt_row as u16))?;
     write!(
         frame,
         "{}{}",
@@ -1098,15 +1301,16 @@ fn draw(editor: &Editor, completion: &Completion, cache: &CategoryCache) -> io::
             command_colors(&displayed)
         }
     )?;
-    for row in &rows {
-        write!(frame, "\r\n{row}")?;
-    }
-    if !rows.is_empty() {
-        queue!(frame, MoveUp(rows.len() as u16))?;
+    for (index, row) in rows.iter().enumerate() {
+        queue!(frame, MoveTo(0, (prompt_row + 1 + index) as u16))?;
+        write!(frame, "{row}")?;
     }
     queue!(
         frame,
-        MoveToColumn((prompt_width + width(&editor.input[offset..editor.cursor])) as u16),
+        MoveTo(
+            (prompt_width + width(&editor.input[offset..editor.cursor])) as u16,
+            prompt_row as u16
+        ),
         Show,
         EndSynchronizedUpdate
     )?;
@@ -1168,12 +1372,11 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
         ));
     }
     let mut guard = TerminalGuard::enter().map_err(fail)?;
-    // Fresh viewport on entry so the first frame matches a cleared screen.
-    scroll_off().map_err(fail)?;
-    println!(
-        "{}",
-        welcome(usize::from(terminal::size().unwrap_or((80, 24)).0))
-    );
+    // Raw mode is off while a command runs, so Ctrl+C is a real signal. Swallow it here;
+    // the child shares the console and still dies from it, which ends the capture loop.
+    let _ = ctrlc::set_handler(|| {});
+    let mut transcript = Transcript::default();
+    transcript.push_str(&banner());
     let mut editor = Editor::default();
     let completer = Completer::new();
     let mut categories = CategoryCache::default();
@@ -1203,6 +1406,7 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
                 } else {
                     &categories
                 },
+                &transcript,
             )
             .map_err(fail)?;
             dirty = false;
@@ -1220,9 +1424,39 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
         ) {
             continue;
         }
+        if let Event::Mouse(mouse) = &event
+            && !matches!(
+                mouse.kind,
+                MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+            )
+        {
+            continue;
+        }
         dirty = true;
         let action = match event {
+            Event::Key(key) if matches!(key.code, KeyCode::PageUp | KeyCode::PageDown) => {
+                let page = view_height().saturating_sub(2).max(1) as isize;
+                transcript.scroll_by(
+                    if key.code == KeyCode::PageUp {
+                        page
+                    } else {
+                        -page
+                    },
+                    view_height(),
+                );
+                Action::Continue
+            }
+            Event::Mouse(mouse) => {
+                let delta = if mouse.kind == MouseEventKind::ScrollUp {
+                    3
+                } else {
+                    -3
+                };
+                transcript.scroll_by(delta, view_height());
+                Action::Continue
+            }
             Event::Key(key) => {
+                transcript.scroll = 0;
                 if categories.error.is_some() && suggestion_shortcut(key) {
                     categories.invalidate();
                 }
@@ -1246,17 +1480,13 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
             continue;
         }
         if action == Action::Exit {
-            scroll_off().map_err(fail)?;
             guard.pause().map_err(fail)?;
             return Ok(());
         }
         if action == Action::Clear {
             trace("branch-clear");
-            scroll_off().map_err(fail)?;
-            println!(
-                "{}",
-                welcome(usize::from(terminal::size().unwrap_or((80, 24)).0))
-            );
+            transcript = Transcript::default();
+            transcript.push_str(&banner());
             trace("branch-clear-painted");
             editor.submitted();
             continue;
@@ -1268,17 +1498,13 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
             }
             value => value,
         };
-        queue!(
-            io::stdout(),
-            MoveToColumn(0),
-            Clear(ClearType::FromCursorDown)
-        )
-        .map_err(fail)?;
-        guard.pause().map_err(fail)?;
-        println!("{}{}\n", paint(TEAL, PROMPT), command_colors(&editor.input));
+        transcript.push_str(&format!(
+            "{}{}\n\n",
+            paint(TEAL, PROMPT),
+            command_colors(&editor.input)
+        ));
         match parsed {
             Ok(args) => {
-                let json = args.json;
                 let invalidate = matches!(
                     &args.command,
                     Command::Login { .. }
@@ -1294,19 +1520,13 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
                         ..
                     }
                 );
-                if let Err(error) = run_with(args, runtime) {
-                    if json {
-                        if let Error::Api { response, .. }
-                        | Error::CheckIn { response, .. }
-                        | Error::GameTasks { response } = &error
-                        {
-                            println!("{response:#}");
-                        } else {
-                            println!("{:#}", serde_json::json!({"error":error.to_string()}));
-                        }
-                    } else if !matches!(error, Error::GameLost) {
-                        eprintln!("Error: {error}");
-                    }
+                let mut words = script::words(&editor.input).unwrap_or_default();
+                if words.first().is_some_and(|word| word == "ncell") {
+                    words.remove(0);
+                }
+                guard.pause().map_err(fail)?;
+                if let Err(error) = run_captured(&words, &mut transcript) {
+                    transcript.push_str(&format!("Error: {error}\n"));
                 }
                 if invalidate {
                     categories.invalidate();
@@ -1315,10 +1535,10 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
                     packs.invalidate();
                 }
             }
-            Err(ParseError::Display(output)) => print!("{output}"),
+            Err(ParseError::Display(output)) => transcript.push_str(&output),
             Err(ParseError::Message(_)) => unreachable!(),
         }
-        println!();
+        transcript.push_str("\n");
         editor.submitted();
         // Do not interpret the Enter/keyup left by an OTP or external editor as a new command.
         while event::poll(Duration::ZERO).map_err(fail)? {
