@@ -82,12 +82,14 @@ fn refreshed_identity_is_cached_and_bootstrap_errors_are_not_hidden() {
 
 #[test]
 fn all_game_progress_uses_affordable_entries_without_cap() {
-    assert_eq!(affordable_total(0, 85, 25), 3);
-    assert_eq!(affordable_total(1, 60, 25), 3);
-    assert_eq!(affordable_total(3, 10, 25), 3);
-    assert_eq!(affordable_total(0, 0, 25), 0);
-    assert_eq!(affordable_total(0, 5000, 25), 200);
-    assert_eq!(affordable_total(1, 85, 25), 4);
+    // Games playable from here on: already played plus wallet divided by entry fee.
+    let total = |played: u64, tokens: u64| played.saturating_add(tokens / 25);
+    assert_eq!(total(0, 85), 3);
+    assert_eq!(total(1, 60), 3);
+    assert_eq!(total(3, 10), 3);
+    assert_eq!(total(0, 0), 0);
+    assert_eq!(total(0, 5000), 200);
+    assert_eq!(total(1, 85), 4);
 }
 
 #[test]
@@ -106,7 +108,7 @@ fn completed_tasks_are_normal_results_but_other_failures_are_errors() {
 fn game_arguments_require_one_action_and_task_ids() {
     let args = Args::try_parse_from(["ncell", "game", "claim-task", "1,2,3"]).unwrap();
     assert!(
-        matches!(args.command, Command::Game { action: GameCommand::ClaimTask { ids } } if ids == ["1", "2", "3"])
+        matches!(args.command, Command::Game { action: GameCommand::ClaimTask { ids } } if ids == [TaskId::Id(1), TaskId::Id(2), TaskId::Id(3)])
     );
     assert!(Args::try_parse_from(["ncell", "game", "check-in"]).is_ok());
     for flags in [

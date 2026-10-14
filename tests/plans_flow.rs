@@ -55,10 +55,12 @@ fn plans_preserve_catalog_selection_and_reject_missing_packages() {
             .with_status(200)
             .with_body(response.to_string())
             .create();
-        let result =
-            Client::with_base_url(&server.url())
-                .unwrap()
-                .plans("9812345678", "test-token", 66);
+        let result = Client::with_base_url(&server.url()).unwrap().search_plans(
+            "9812345678",
+            "test-token",
+            66,
+            "",
+        );
         assert_eq!(result.is_ok(), valid);
         request.assert();
     }
@@ -95,9 +97,15 @@ fn tags_omit_version_and_route_sms_and_voice_without_data_fallback() {
             ))
             .with_body(r#"{"responseHeader":{"responseCode":"200"},"availablePackages":[]}"#)
             .create();
-        client.plans("9812345678", "test-token", tag).unwrap();
+        client
+            .search_plans("9812345678", "test-token", tag, "")
+            .unwrap();
         request.assert();
     }
-    assert!(client.plans("9812345678", "test-token", 9999).is_err());
+    assert!(
+        client
+            .search_plans("9812345678", "test-token", 9999, "")
+            .is_err()
+    );
     tags.assert();
 }

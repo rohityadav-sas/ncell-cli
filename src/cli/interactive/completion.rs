@@ -1,5 +1,6 @@
 use super::super::{Args, Sort, script};
 use clap::{Arg, Command, CommandFactory, ValueEnum};
+use ncell_cli::api::DEFAULT_PLAN_CATEGORY;
 use std::{collections::HashSet, ops::Range, path::Path};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -622,19 +623,6 @@ pub(super) fn categories(response: &serde_json::Value) -> Result<Vec<Suggestion>
 #[path = "../../../tests/unit/interactive_completion.rs"]
 mod tests;
 
-/// Test helper that fetches catalogs and merges overlapping memberships by pack ID.
-#[cfg(test)]
-pub(super) fn unique_packs(
-    response: &serde_json::Value,
-    mut fetch: impl FnMut(u64) -> Result<serde_json::Value, String>,
-) -> Result<Vec<Suggestion>, String> {
-    let fetched = supported_category_ids(response)?
-        .into_iter()
-        .map(|category| fetch(category).map(|response| (category, response)))
-        .collect::<Result<Vec<_>, _>>()?;
-    merge_fetched_packs(fetched)
-}
-
 pub(super) fn supported_category_ids(response: &serde_json::Value) -> Result<Vec<u64>, String> {
     let tags = response["tags"]
         .as_array()
@@ -653,6 +641,7 @@ pub(super) fn supported_category_ids(response: &serde_json::Value) -> Result<Vec
         .map(|tag| {
             tag["id"]
                 .as_u64()
+                .or_else(|| tag["id"].as_str()?.parse().ok())
                 .ok_or_else(|| "Invalid category ID".to_owned())
         })
         .collect()
@@ -719,12 +708,16 @@ pub(super) fn pack_suggestions(
         .map(|pack| {
             let mut item = pack.clone();
             if category.is_none() {
-                let chosen = if pack.pack_categories.contains(&66) {
-                    66
+                let chosen = if pack.pack_categories.contains(&DEFAULT_PLAN_CATEGORY) {
+                    DEFAULT_PLAN_CATEGORY
                 } else {
-                    *pack.pack_categories.iter().min().unwrap_or(&66)
+                    *pack
+                        .pack_categories
+                        .iter()
+                        .min()
+                        .unwrap_or(&DEFAULT_PLAN_CATEGORY)
                 };
-                if chosen != 66 {
+                if chosen != DEFAULT_PLAN_CATEGORY {
                     item.subscription_category = Some(chosen);
                     item.continue_input = true;
                 }

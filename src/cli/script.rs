@@ -12,6 +12,7 @@ thread_local! {
     static CONTEXT: std::cell::RefCell<Option<Value>> = const { std::cell::RefCell::new(None) };
 }
 pub(super) fn emit_json(result: Value) {
+    // One compact object per line: scripts can stream with `jq -c` or read line by line.
     CONTEXT.with(|context| {
         let output = if let Some(context) = context.borrow().as_ref() {
             let mut output = context.clone();
@@ -20,7 +21,7 @@ pub(super) fn emit_json(result: Value) {
         } else {
             result
         };
-        println!("{output:#}");
+        println!("{output}");
         let _ = io::stdout().flush();
     });
 }
@@ -93,12 +94,9 @@ pub(super) fn script_directory() -> Result<PathBuf> {
         .ok_or_else(|| fail("Could not locate the CLI script storage"))
 }
 fn script_name(file: &std::path::Path) -> Result<()> {
-    if file.components().count() != 1
-        || !matches!(
-            file.components().next(),
-            Some(std::path::Component::Normal(_))
-        )
-        || file.to_string_lossy().contains(['/', '\\', ':'])
+    // A bare file name (no folders) ending in .ncell: one comparison covers
+    // separators, drive prefixes and parent components alike.
+    if file.file_name() != Some(file.as_os_str())
         || !file
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("ncell"))
@@ -121,13 +119,24 @@ fn resolve_script(file: PathBuf) -> Result<PathBuf> {
     Ok(file)
 }
 
-fn editor_arguments() -> Vec<&'static str> {
+/// Honour the user's editor first; fall back to per-OS openers.
+/// `open -t` on macOS now passes `-W` so it waits instead of returning at once.
+/// Plain `xdg-open` cannot wait or guarantee an editor, so $EDITOR wins on Linux.
+fn editor_arguments() -> Vec<String> {
+    for key in ["VISUAL", "EDITOR"] {
+        if let Some(command) = std::env::var(key)
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+        {
+            return command.split_whitespace().map(str::to_owned).collect();
+        }
+    }
     #[cfg(target_os = "windows")]
-    return vec!["notepad.exe"];
+    return vec!["notepad.exe".into()];
     #[cfg(target_os = "macos")]
-    return vec!["open", "-t"];
+    return vec!["open".into(), "-t".into(), "-W".into()];
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    vec!["xdg-open"]
+    vec!["xdg-open".into()]
 }
 fn create_file(
     file: &std::path::Path,
@@ -150,7 +159,7 @@ fn edit_script(file: &std::path::Path, json_output: bool) -> Result<()> {
         return Err(fail("The saved script is not a file"));
     }
     let arguments = editor_arguments();
-    let status = std::process::Command::new(arguments[0])
+    let status = std::process::Command::new(&arguments[0])
         .args(&arguments[1..])
         .arg(file)
         .stdin(std::process::Stdio::inherit())
@@ -281,7 +290,7 @@ fn execute(
         })?;
     }
     if json_output {
-        println!("{:#}", json!({"event":"complete", "steps":steps.len()}));
+        println!("{}", json!({"event":"complete", "steps":steps.len()}));
     }
     Ok(())
 }
@@ -323,7 +332,7 @@ pub(super) fn run(
                     .iter()
                     .map(|path| path.file_name().unwrap().to_string_lossy().chars().count())
                     .max()
-                    .unwrap()
+                    .unwrap_or(6)
                     .max(6);
                 println!("{}", "-".repeat(width));
                 for path in scripts {
@@ -365,7 +374,7 @@ pub(super) fn run(
             let file = directory.join(file);
             create_file(&file, |file| edit_script(file, json_output))?;
             if json_output {
-                println!("{:#}", json!({"created":file}));
+                println!("{}", json!({"created":file}));
             } else {
                 println!(
                     "Created {}. Run it with ncell script run after saving your changes.",

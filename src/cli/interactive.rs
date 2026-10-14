@@ -40,7 +40,7 @@ const MUTED: &str = "137;145;161";
 const BLUE: &str = "142;193;235";
 const BORDER: &str = "86;77;109";
 const PROMPT: &str = "  ❯ ";
-const CATEGORY_TTL: Duration = Duration::from_secs(600);
+const CATEGORY_TTL: Duration = Duration::from_secs(ncell_cli::api::CATEGORY_TTL_SECS);
 const PACK_TTL: Duration = Duration::from_secs(300);
 
 fn paint(color: &str, value: &str) -> String {
@@ -81,6 +81,15 @@ fn clipped(value: &str, available: usize) -> String {
 }
 
 pub(super) fn welcome(columns: usize) -> String {
+    const L: [&str; 7] = [
+        "██     ",
+        "██     ",
+        "██     ",
+        "██     ",
+        "██     ",
+        "██     ",
+        "███████",
+    ];
     let letters = [
         [
             "██    ██",
@@ -109,24 +118,8 @@ pub(super) fn welcome(columns: usize) -> String {
             "██     ",
             "███████",
         ],
-        [
-            "██     ",
-            "██     ",
-            "██     ",
-            "██     ",
-            "██     ",
-            "██     ",
-            "███████",
-        ],
-        [
-            "██     ",
-            "██     ",
-            "██     ",
-            "██     ",
-            "██     ",
-            "██     ",
-            "███████",
-        ],
+        L,
+        L,
     ];
     let colors = [TEAL, "146;198;207", "160;190;224", "175;182;235", LAVENDER];
     if columns < 8 {
@@ -203,7 +196,7 @@ type PanicHook = Arc<dyn Fn(&std::panic::PanicHookInfo<'_>) + Send + Sync>;
 /// terminal passes mouse events to the app and normal drag-selection stops.
 /// Set NCELL_MOUSE=1 to enable it; otherwise scroll with PageUp/PageDown.
 fn mouse_capture() -> bool {
-    !matches!(std::env::var("NCELL_MOUSE").as_deref(), Ok("0"))
+    matches!(std::env::var("NCELL_MOUSE").as_deref(), Ok("1"))
 }
 struct TerminalGuard {
     active: bool,
@@ -405,7 +398,7 @@ impl CategoryCache {
                                 let sender = sender.clone();
                                 scope.spawn(move || {
                                     let result = client
-                                        .plans(&msisdn, &token, category)
+                                        .search_plans(&msisdn, &token, category, "")
                                         .map(|response| (category, response))
                                         .map_err(|error| error.to_string());
                                     let completed = completed.fetch_add(1, Ordering::Relaxed) + 1;
@@ -453,21 +446,6 @@ enum Action {
     Submit,
     Clear,
     Exit,
-}
-/// Env-gated trace (NCELL_TRACE=1) for diagnosing interactive dispatch.
-/// Appends markers to %TEMP%\ncell-trace.log. Never enabled in normal runs.
-fn trace(marker: &str) {
-    if std::env::var_os("NCELL_TRACE").is_none() {
-        return;
-    }
-    if let Ok(mut file) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(std::env::temp_dir().join("ncell-trace.log"))
-    {
-        use std::io::Write as _;
-        let _ = writeln!(file, "{marker}");
-    }
 }
 #[derive(Default)]
 struct Transcript {
@@ -796,16 +774,15 @@ impl Editor {
                 }
             }
             KeyCode::Enter => {
-                if self.input.trim() == "exit" || self.input.trim() == "ncell exit" {
-                    trace("key-exit");
+                let trimmed = self.input.trim();
+                if trimmed == "exit" || trimmed == "ncell exit" {
                     return Action::Exit;
                 }
-                if self.input.trim() == "clear"
-                    || self.input.trim() == "ncell clear"
-                    || self.input.trim() == "cls"
-                    || self.input.trim() == "ncell cls"
+                if trimmed == "clear"
+                    || trimmed == "ncell clear"
+                    || trimmed == "cls"
+                    || trimmed == "ncell cls"
                 {
-                    trace("key-clear");
                     return Action::Clear;
                 }
                 if let Some(item) = selected
@@ -1549,10 +1526,8 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
             return Ok(());
         }
         if action == Action::Clear {
-            trace("branch-clear");
             transcript = Transcript::default();
             transcript.push_str(&banner());
-            trace("branch-clear-painted");
             editor.submitted();
             continue;
         }
@@ -1601,7 +1576,8 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
                 }
             }
             Err(ParseError::Display(output)) => transcript.push_str(&output),
-            Err(ParseError::Message(_)) => unreachable!(),
+            // The Message case already continued above; treat a stray one as a notice.
+            Err(ParseError::Message(message)) => editor.message = Some(message),
         }
         transcript.push_str("\n");
         editor.submitted();

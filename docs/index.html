@@ -900,7 +900,10 @@ brew install ncell-cli</code></pre>
             <pre data-lang="Shell"><code>ncell plans --category 50</code></pre>
 
             <h3>Subscribe</h3>
-            <p>Use the plan ID and its category. Paid packs charge your Ncell account.</p>
+            <p>Use the plan ID and its category. Paid packs charge your Ncell account, so the
+                command shows the name and price and asks for confirmation. Use
+                <code>--yes</code> for scripts (required when input is piped) and
+                <code>--dry-run</code> to preview without spending.</p>
             <pre data-lang="Shell"><code>ncell plans subscribe 984 --category 50</code></pre>
 
             <p>The plan ID is a required positional argument. Use a category ID from the category list;

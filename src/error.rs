@@ -44,6 +44,9 @@ pub enum Error {
     Prompt,
 }
 impl Error {
+    /// Classify transport failures for scripts and tests: timeouts, refused
+    /// connections and other network errors stay distinguishable on purpose,
+    /// so the underlying reqwest error is intentionally not stored here.
     pub(crate) fn from_http(error: reqwest::Error) -> Self {
         if error.is_timeout() {
             Self::Timeout

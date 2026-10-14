@@ -11,7 +11,9 @@ fn app_codes_have_meanings_without_exposing_server_data() {
     ] {
         assert!(api_error_detail(code).contains(expected));
     }
-    assert!(api_error_detail("DVS2008").contains("unconfirmed"));
+    assert!(api_error_detail("NEW9999").contains("unavailable"));
+    // Removed codes (DVS2008 and friends) fall through to the same fallback.
+    assert!(api_error_detail("DVS2008").contains("unavailable"));
     assert!(api_error_detail("BIL1000").contains("Subscription success"));
 }
 
@@ -32,5 +34,5 @@ fn authentication_errors_have_safe_labels_and_preserve_codes() {
         assert!(!message.contains("secret"));
     }
     assert!(api_error_detail("NEW9999").contains("unavailable"));
-    assert!(api_error_detail("LGN2003").contains("unconfirmed"));
+    assert!(api_error_detail("LGN2003").contains("unavailable"));
 }

@@ -4,17 +4,6 @@ use scraper::{Html, Selector};
 use serde_json::Value;
 use std::time::Duration;
 
-pub fn check_in(url: &str, activities: &[u64], mut on_task: impl FnMut(&Value)) -> Result<Value> {
-    let web = web_client()?;
-    submit(
-        &web,
-        url,
-        activities,
-        &super::game_endpoint("api"),
-        &mut on_task,
-    )
-}
-
 pub(super) const WEB_UA: &str = "wv";
 
 pub(super) fn web_client() -> Result<Client> {
@@ -22,62 +11,13 @@ pub(super) fn web_client() -> Result<Client> {
         .cookie_store(true)
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(90))
+        .user_agent(WEB_UA)
         .build()
         .map_err(Error::from_http)
 }
 
-pub fn game_tasks(url: &str) -> Result<Value> {
-    tasks(
-        &web_client()?,
-        url,
-        &super::game_endpoint("api/challenge_status.php"),
-    )
-}
-
-fn tasks(web: &Client, url: &str, endpoint: &str) -> Result<Value> {
-    web.get(url)
-        .header("User-Agent", WEB_UA)
-        .send()
-        .map_err(Error::from_http)?
-        .error_for_status()
-        .map_err(Error::from_http)?;
-    decode(
-        web.get(endpoint)
-            .header("User-Agent", WEB_UA)
-            .send()
-            .map_err(Error::from_http)?,
-        false,
-    )
-}
-
-fn submit(
-    web: &Client,
-    url: &str,
-    activities: &[u64],
-    base: &str,
-    on_task: &mut impl FnMut(&Value),
-) -> Result<Value> {
-    let csrf = csrf(web, url)?;
-    GameSession {
-        web: web.clone(),
-        csrf,
-        tokens: None,
-    }
-    .claim_at(activities, base, on_task)
-}
-
-pub(super) fn csrf(web: &Client, url: &str) -> Result<String> {
-    let csrf = bootstrap(web, url)?.0;
-    require_csrf(&csrf)?;
-    Ok(csrf)
-}
-
 fn bootstrap(web: &Client, url: &str) -> Result<(String, Option<u64>)> {
-    let page = web
-        .get(url)
-        .header("User-Agent", WEB_UA)
-        .send()
-        .map_err(Error::from_http)?;
+    let page = web.get(url).send().map_err(Error::from_http)?;
     if !page.status().is_success() {
         return Err(Error::CheckIn {
             message: "Check-in website rejected the request".into(),
@@ -136,11 +76,7 @@ impl GameSession {
     }
     fn tasks_at(&self, endpoint: &str) -> Result<Value> {
         decode(
-            self.web
-                .get(endpoint)
-                .header("User-Agent", WEB_UA)
-                .send()
-                .map_err(Error::from_http)?,
+            self.web.get(endpoint).send().map_err(Error::from_http)?,
             false,
         )
     }
@@ -237,7 +173,6 @@ fn claim(web: &Client, endpoint: &str, csrf: &str, activity: Option<u64>) -> Res
     }
     let response = web
         .post(endpoint)
-        .header("User-Agent", WEB_UA)
         .multipart(form)
         .send()
         .map_err(Error::from_http)?;
@@ -263,8 +198,18 @@ pub fn already_checked_in(data: &Value) -> bool {
 }
 
 fn decode(response: reqwest::blocking::Response, reward: bool) -> Result<Value> {
-    let status = response.status();
-    let data: Value = response.json().map_err(|_| Error::InvalidResponse)?;
+    let status = response.status().as_u16();
+    let data: Value = response.json().map_err(|_| {
+        if (200..300).contains(&status) {
+            Error::InvalidResponse
+        } else {
+            Error::CheckIn {
+                message: format!("Game website returned HTTP {status}"),
+                status,
+                response: Box::new(Value::Null),
+            }
+        }
+    })?;
     let success = if reward {
         data["value"].is_string()
             && (data["new_token_balance"].is_number() || data["points_remaining"].is_number())
@@ -274,14 +219,14 @@ fn decode(response: reqwest::blocking::Response, reward: bool) -> Result<Value> 
     } else {
         data["success"] == true
     };
-    if !status.is_success() || !success {
+    if !(200..300).contains(&status) || !success {
         return Err(Error::CheckIn {
             message: data["message"]
                 .as_str()
                 .or_else(|| data["error"].as_str())
                 .unwrap_or("Game request failed")
                 .to_owned(),
-            status: status.as_u16(),
+            status,
             response: Box::new(data),
         });
     }

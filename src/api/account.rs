@@ -1,4 +1,4 @@
-use super::{Client, models::request_header};
+use super::{APP_VERSION, CATEGORY_TTL_SECS, Client, GAME_CLIENT_ID, models::request_header};
 use crate::error::{Error, Result};
 use serde_json::{Value, json};
 
@@ -7,7 +7,7 @@ impl Client {
         let response = self.post(
             "/v1.0/utilitymgt/third-party-encryption",
             &json!({
-                "thirdPartyClientRequest": {"clientId": "47c0b8f2-1766-c12a-5c88-519e40af83b4"},
+                "thirdPartyClientRequest": {"clientId": GAME_CLIENT_ID},
                 "requestHeader": {"msisdn": msisdn},
             }),
             Some(token),
@@ -70,8 +70,8 @@ impl Client {
         }
         let mut header = request_header(msisdn, "SUBSCRIBE");
         header["deviceId"] = device_id.into();
-        header["appVersion"] = "8.2.1.0".into();
-        let response = self.post(
+        header["appVersion"] = APP_VERSION.into();
+        let (status, response) = self.post_raw(
             "/v1.0/billingmgt/product/subscribe",
             &json!({
                 "productSubscriptionSummaryRequest": {
@@ -84,23 +84,30 @@ impl Client {
             }),
             Some(token),
         )?;
-        if response["responseHeader"]["responseDescDisplay"] == "BIL1000"
-            || response["productSubscriptionSummaryResponse"]["status"]
-                .as_str()
-                .is_some_and(|s| s.eq_ignore_ascii_case("success"))
-        {
+        // Success is judged here, not in the HTTP layer: Ncell answers
+        // subscriptions with BIL1000 instead of the usual code 200.
+        // An HTTP error still wins over a success-looking body.
+        let subscribed = (200..300).contains(&status)
+            && (response["responseHeader"]["responseDescDisplay"] == "BIL1000"
+                || response["productSubscriptionSummaryResponse"]["status"]
+                    .as_str()
+                    .is_some_and(|s| s.eq_ignore_ascii_case("success")));
+        if subscribed {
             Ok(response)
         } else {
-            Err(Error::InvalidResponse)
+            Err(super::client::api_error(status, response))
         }
     }
 
     pub fn categories(&self, msisdn: &str, token: &str) -> Result<Value> {
-        if let Some((created, cached)) = self.categories_cache.lock().unwrap().get(msisdn)
-            && created.elapsed() < std::time::Duration::from_secs(600)
+        let cache = self.categories_cache.lock().map_err(|_| Error::Storage)?;
+        if let Some((created, entry)) = cache.get(msisdn)
+            && created.elapsed() < std::time::Duration::from_secs(CATEGORY_TTL_SECS)
         {
-            return Ok(cached.clone());
+            return Ok(entry.clone());
         }
+        // Release the mutex before the slow request, then re-lock only to store.
+        drop(cache);
         let header = request_header(msisdn, "N/A");
         let response = self.post(
             "/v1.0/product-catalog/tags",
@@ -110,15 +117,23 @@ impl Client {
         if !response["tags"].is_array() {
             return Err(Error::InvalidResponse);
         }
-        self.categories_cache.lock().unwrap().insert(
-            msisdn.to_owned(),
-            (std::time::Instant::now(), response.clone()),
-        );
+        self.categories_cache
+            .lock()
+            .map_err(|_| Error::Storage)?
+            .insert(
+                msisdn.to_owned(),
+                (std::time::Instant::now(), response.clone()),
+            );
         Ok(response)
     }
 
-    pub fn plans(&self, msisdn: &str, token: &str, category: u64) -> Result<Value> {
-        self.search_plans(msisdn, token, category, "")
+    /// Category IDs arrive as numbers from some endpoints and as strings from
+    /// others; accept both so a string ID never reports "unknown category".
+    fn category_id_matches(value: &Value, category: u64) -> bool {
+        value.as_u64().is_some_and(|id| id == category)
+            || value
+                .as_str()
+                .is_some_and(|id| id.parse::<u64>().is_ok_and(|parsed| parsed == category))
     }
 
     pub fn search_plans(
@@ -132,11 +147,10 @@ impl Client {
             "data"
         } else {
             let tags = self.categories(msisdn, token)?;
-            let categories = tags["tags"]
-                .as_array()
-                .unwrap()
+            let tags = tags["tags"].as_array().ok_or(Error::InvalidResponse)?;
+            let categories = tags
                 .iter()
-                .find(|t| t["id"] == category)
+                .find(|t| Self::category_id_matches(&t["id"], category))
                 .and_then(|t| t["categories"].as_array())
                 .ok_or(Error::InvalidInput(
                     "Unknown category. Use ncell plans categories",
@@ -185,7 +199,7 @@ impl Client {
     }
     pub fn profile(&self, msisdn: &str, token: &str) -> Result<Value> {
         let mut header = request_header(msisdn, "PROFILE");
-        header["appVersion"] = "8.2.1.0".into();
+        header["appVersion"] = APP_VERSION.into();
         let response = self.post(
             "/v1.0/subscriber/profile/query",
             &json!({

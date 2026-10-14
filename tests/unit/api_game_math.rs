@@ -196,7 +196,7 @@ fn plays_in_order_and_preserves_win_without_replaying_answers() {
         mocks.push(
             server
                 .mock("POST", "/math")
-                .match_header("user-agent", mockito::Matcher::Missing)
+                .match_header("user-agent", "wv")
                 .match_header("origin", mockito::Matcher::Missing)
                 .match_header("referer", mockito::Matcher::Missing)
                 .match_body(mockito::Matcher::Regex(format!(

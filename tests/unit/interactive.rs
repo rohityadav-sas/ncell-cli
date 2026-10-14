@@ -350,9 +350,19 @@ fn pack_cache_expires_after_five_minutes_and_acceptance_routes_sms_catalog() {
     assert!(!cache.fresh(true));
     assert!(cache.fresh(false));
     let input = "plans subscribe 984";
-    let packs = super::completion::unique_packs(
-        &serde_json::json!({"tags":[{"id":50,"categories":[{"name":"GSM_SMS"}]}]}),
-        |_| Ok(serde_json::json!({"availablePackages":[{"id":"984","ncellName":"SMS pack"}]})),
+    let tags = serde_json::json!({"tags":[{"id":50,"categories":[{"name":"GSM_SMS"}]}]});
+    let packs = super::completion::merge_fetched_packs(
+        super::completion::supported_category_ids(&tags)
+            .unwrap()
+            .into_iter()
+            .map(|category| {
+                Ok::<_, String>((
+                    category,
+                    serde_json::json!({"availablePackages":[{"id":"984","ncellName":"SMS pack"}]}),
+                ))
+            })
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .unwrap(),
     )
     .unwrap();
     let mut editor = self::editor(input);

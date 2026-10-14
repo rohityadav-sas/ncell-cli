@@ -33,7 +33,16 @@ impl Client {
         })
     }
 
-    pub(crate) fn post(&self, path: &str, body: &Value, token: Option<&str>) -> Result<Value> {
+    /// Raw POST: transport and HTTP-level failures become errors, but the
+    /// Ncell envelope (`responseCode`) is left for the caller to judge.
+    /// Non-JSON error pages (e.g. a 502 HTML page) report their HTTP status
+    /// instead of a misleading "invalid response".
+    pub(crate) fn post_raw(
+        &self,
+        path: &str,
+        body: &Value,
+        token: Option<&str>,
+    ) -> Result<(u16, Value)> {
         let mut request = self
             .http
             .post(format!("{}{path}", self.base_url))
@@ -42,37 +51,56 @@ impl Client {
             request = request.bearer_auth(token);
         }
         let response = request.send().map_err(Error::from_http)?;
-        let status = response.status();
-        let value: Value = response.json().map_err(|_| Error::InvalidResponse)?;
+        let status = response.status().as_u16();
+        let value: Value = response.json().map_err(|_| {
+            if (200..300).contains(&status) {
+                Error::InvalidResponse
+            } else {
+                Error::Api {
+                    status,
+                    code: format!("HTTP{status}"),
+                    response: Box::new(Value::Null),
+                }
+            }
+        })?;
+        Ok((status, value))
+    }
+
+    pub(crate) fn post(&self, path: &str, body: &Value, token: Option<&str>) -> Result<Value> {
+        let (status, value) = self.post_raw(path, body, token)?;
         let header = &value["responseHeader"];
         let code = &header["responseCode"];
-        let subscription_success = path == "/v1.0/billingmgt/product/subscribe"
-            && header["responseDescDisplay"] == "BIL1000";
-        if !status.is_success() || (!subscription_success && code != "200" && code != 200) {
-            // Only expose short alphanumeric codes, never arbitrary server text or tokens.
-            let detail = header["responseDescDisplay"].as_str().filter(|s| {
-                (6..=12).contains(&s.len()) && {
-                    let (prefix, digits) = s.as_bytes().split_at(s.len() - 4);
-                    prefix.iter().all(u8::is_ascii_uppercase)
-                        && digits.iter().all(u8::is_ascii_digit)
-                }
-            });
-            let code = detail
-                .map(str::to_owned)
-                .or_else(|| match code {
-                    Value::String(s) => Some(s.clone()),
-                    Value::Number(n) => Some(n.to_string()),
-                    _ => None,
-                })
-                .filter(|s| s.len() <= 32 && s.chars().all(|c| c.is_ascii_alphanumeric()))
-                .unwrap_or_else(|| "unknown".into());
-            return Err(Error::Api {
-                status: status.as_u16(),
-                code,
-                response: Box::new(value),
-            });
+        if code != "200" && code != 200 {
+            return Err(api_error(status, value));
         }
         Ok(value)
+    }
+}
+
+/// Build the shared rejection error: HTTP status plus the short envelope code.
+/// Only short alphanumeric codes are exposed, never arbitrary server text or tokens.
+pub(super) fn api_error(status: u16, value: Value) -> Error {
+    let header = &value["responseHeader"];
+    let code = &header["responseCode"];
+    let detail = header["responseDescDisplay"].as_str().filter(|s| {
+        (6..=12).contains(&s.len()) && {
+            let (prefix, digits) = s.as_bytes().split_at(s.len() - 4);
+            prefix.iter().all(u8::is_ascii_uppercase) && digits.iter().all(u8::is_ascii_digit)
+        }
+    });
+    let code = detail
+        .map(str::to_owned)
+        .or_else(|| match code {
+            Value::String(s) => Some(s.clone()),
+            Value::Number(n) => Some(n.to_string()),
+            _ => None,
+        })
+        .filter(|s| s.len() <= 32 && s.chars().all(|c| c.is_ascii_alphanumeric()))
+        .unwrap_or_else(|| "unknown".into());
+    Error::Api {
+        status,
+        code,
+        response: Box::new(value),
     }
 }
 

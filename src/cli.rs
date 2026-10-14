@@ -3,7 +3,7 @@ mod script;
 use clap::builder::styling::{AnsiColor, Style};
 use clap::{Parser, Subcommand};
 use ncell_cli::{
-    api::{Client, DEFAULT_PLAN_CATEGORY},
+    api::{CATEGORY_TTL_SECS, Client, DEFAULT_PLAN_CATEGORY, GAME_TOKEN_COST},
     auth::{AuthService, normalize_number},
     error::{Error, Result},
     session::{Account, FileStore, SessionStore},
@@ -127,6 +127,12 @@ enum PlanCommand {
         id: String,
         #[arg(long, default_value_t = DEFAULT_PLAN_CATEGORY)]
         category: u64,
+        /// Skip the confirmation prompt (required for scripts and pipes)
+        #[arg(long)]
+        yes: bool,
+        /// Show what would be bought without spending anything
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -153,7 +159,7 @@ enum GameCommand {
     /// Claim tasks
     ClaimTask {
         #[arg(required = true, value_delimiter = ',', num_args = 1.., value_parser = parse_task_id)]
-        ids: Vec<String>,
+        ids: Vec<TaskId>,
     },
 }
 
@@ -161,41 +167,64 @@ enum GameCommand {
 struct GamePlayOptions {
     /// Number of games to play
     #[arg(long, default_value = "1", value_parser = parse_count)]
-    count: String,
+    count: Count,
     /// Delay between games: seconds by default, or use s, m, h (e.g. 1.5m)
     #[arg(long, default_value = "0", value_parser = parse_delay)]
     delay: Duration,
 }
 
-fn parse_count(value: &str) -> std::result::Result<String, String> {
-    if value == "all" || value.parse::<u32>().is_ok_and(|n| n > 0) {
-        Ok(value.into())
+/// How many entries to play: a fixed number, or every token in the wallet.
+/// Parsing once here means the game loop never re-parses or unwraps.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Count {
+    N(u64),
+    All,
+}
+
+fn parse_count(value: &str) -> std::result::Result<Count, String> {
+    if value == "all" {
+        Ok(Count::All)
     } else {
-        Err("Count must be a positive integer or all".into())
+        value
+            .parse::<u64>()
+            .ok()
+            .filter(|n| *n > 0)
+            .map(Count::N)
+            .ok_or_else(|| "Count must be a positive integer or all".into())
     }
 }
-fn parse_task_id(value: &str) -> std::result::Result<String, String> {
-    if value == "all" || value.parse::<u64>().is_ok_and(|n| n > 0) {
-        Ok(value.into())
+
+/// One task selector: a single "all" or one numeric task ID.
+/// `all` mixed with IDs is still rejected by `validate_args`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TaskId {
+    All,
+    Id(u64),
+}
+
+fn parse_task_id(value: &str) -> std::result::Result<TaskId, String> {
+    if value == "all" {
+        Ok(TaskId::All)
     } else {
-        Err("Task ID must be a positive integer or all".into())
+        value
+            .parse::<u64>()
+            .ok()
+            .filter(|n| *n > 0)
+            .map(TaskId::Id)
+            .ok_or_else(|| "Task ID must be a positive integer or all".into())
     }
 }
 fn validate_args(args: &Args) -> std::result::Result<(), String> {
     if let Command::Game {
         action: GameCommand::ClaimTask { ids },
     } = &args.command
-        && ids.iter().any(|id| id == "all")
+        && ids.contains(&TaskId::All)
         && ids.len() != 1
     {
         return Err("Use all alone, without task IDs".into());
     }
     Ok(())
 }
-fn affordable_total(played: u64, tokens: u64, cost: u64) -> u64 {
-    played.saturating_add(tokens / cost)
-}
-
 fn insufficient_tokens(error: &Error) -> bool {
     matches!(error, Error::CheckIn { status: 200, message, .. }
         if ["Insufficient tokens", "Not enough points"].iter().any(|known| message.trim().eq_ignore_ascii_case(known)))
@@ -261,22 +290,37 @@ impl Runtime {
         if self.client.is_none() {
             self.client = Some(Client::new()?);
         }
-        Ok(self.client.as_ref().unwrap().clone())
+        Ok(self
+            .client
+            .as_ref()
+            .expect("game client was just created")
+            .clone())
     }
     fn game(&mut self) -> Result<&mut ncell_cli::api::GameSession> {
         let client = self.client()?;
         let session = FileStore::new()?.load()?.ok_or(Error::NotLoggedIn)?;
         let account = session.account.as_ref().ok_or(Error::NotLoggedIn)?;
+        // Cache key carries no secrets: rotation changes the save time,
+        // which is enough to invalidate the cached game session.
         let identity = format!(
             "{}:{}:{}",
-            account.msisdn, session.device_id, account.access_token
+            account.msisdn,
+            session.device_id,
+            account
+                .token_saved_at
+                .map(|saved| saved.to_rfc3339())
+                .unwrap_or_default()
         );
         self.cached_game(identity, || {
             let (url, identity) = AuthService::new(client, FileStore::new()?).authenticated(
                 |client, account, device| {
+                    let saved = account
+                        .token_saved_at
+                        .map(|saved| saved.to_rfc3339())
+                        .unwrap_or_default();
                     Ok((
                         client.check_in_url(&account.msisdn, &account.access_token)?,
-                        format!("{}:{}:{}", account.msisdn, device, account.access_token),
+                        format!("{}:{}:{saved}", account.msisdn, device),
                     ))
                 },
             )?;
@@ -290,13 +334,13 @@ impl Runtime {
     ) -> Result<&mut ncell_cli::api::GameSession> {
         if self.game.as_ref().is_none_or(|(key, created, game)| {
             key != &identity
-                || created.elapsed() >= Duration::from_secs(600)
+                || created.elapsed() >= Duration::from_secs(CATEGORY_TTL_SECS)
                 || game.tokens.is_none()
         }) {
             let (identity, session) = create()?;
             self.game = Some((identity, Instant::now(), session));
         }
-        Ok(&mut self.game.as_mut().unwrap().2)
+        Ok(&mut self.game.as_mut().expect("game session was just cached").2)
     }
 }
 pub fn run(args: Args) -> Result<()> {
@@ -328,14 +372,13 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                 GameCommand::Spin(GamePlayOptions { count, delay })
                 | GameCommand::Scratch(GamePlayOptions { count, delay })
                 | GameCommand::Math(GamePlayOptions { count, delay }) => {
-                    let all = count == "all";
-                    let count = if all {
-                        0
-                    } else {
-                        count.parse::<u64>().unwrap()
+                    let all = matches!(count, Count::All);
+                    let count = match count {
+                        Count::All => 0,
+                        Count::N(n) => n,
                     };
-                    // All three supported games currently charge 25 tokens per entry.
-                    let cost = 25;
+                    // All three supported games currently charge the same entry fee.
+                    let cost = GAME_TOKEN_COST;
                     let mut balance = game.tokens;
                     for index in 0u64.. {
                         if !all && index >= count {
@@ -345,7 +388,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                             let remaining = balance.ok_or(Error::InvalidInput(
                                 "Game page did not provide the token balance",
                             ))?;
-                            let total = affordable_total(index, remaining, cost);
+                            let total = index.saturating_add(remaining / cost);
                             if total == index {
                                 output(
                                     args.json,
@@ -409,6 +452,13 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                                     let _ = io::stdout().flush();
                                 },
                                 |question| {
+                                    // Auto-solve failed and there is no keyboard to ask:
+                                    // fail here instead of hanging on stdin under cron or --json.
+                                    if !io::stdin().is_terminal() {
+                                        return Err(Error::InvalidInput(
+                                            "Math question needs a manual answer but stdin is not interactive",
+                                        ));
+                                    }
                                     manual_math_answer(
                                         question,
                                         &mut io::stdin().lock(),
@@ -490,7 +540,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                 }
                 GameCommand::CheckIn => Vec::new(),
                 GameCommand::ClaimTask { ids } => {
-                    if ids == ["all"] {
+                    if ids == [TaskId::All] {
                         let ids = claimable_ids(&game.tasks()?)?;
                         if ids.is_empty() {
                             output(
@@ -502,7 +552,13 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                         }
                         ids
                     } else {
-                        ids.iter().map(|id| id.parse().unwrap()).collect()
+                        // `validate_args` already rejected a lone "all" mixed with IDs.
+                        ids.iter()
+                            .filter_map(|id| match id {
+                                TaskId::Id(n) => Some(*n),
+                                TaskId::All => None,
+                            })
+                            .collect()
                     }
                 }
             };
@@ -529,7 +585,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                 };
                 output(args.json, response, message);
             } else {
-                let results = response.as_array().unwrap();
+                let results = response.as_array().ok_or(Error::InvalidResponse)?;
                 let failed = results.iter().any(|item| task_failed(&item["response"]));
                 if failed {
                     return Err(Error::GameTasks {
@@ -542,10 +598,14 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
             }
         }
         Command::Sms {
-            action: SmsCommand::SendFree { number, text },
+            action:
+                SmsCommand::SendFree {
+                    number,
+                    text: message,
+                },
         } => {
             let response = authenticated(runtime.client()?, |client, account, _| {
-                client.send_free_sms(&account.msisdn, &account.access_token, &number, &text)
+                client.send_free_sms(&account.msisdn, &account.access_token, &number, &message)
             })?;
             output(
                 args.json,
@@ -554,31 +614,49 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
             );
         }
         Command::Plans {
-            action: Some(PlanCommand::Subscribe { id, category }),
+            action:
+                Some(PlanCommand::Subscribe {
+                    id,
+                    category,
+                    yes,
+                    dry_run,
+                }),
             ..
         } => {
-            let (response, name) =
-                authenticated(runtime.client()?, |client, account, device_id| {
-                    let catalog = client.plans(&account.msisdn, &account.access_token, category)?;
-                    let plan = catalog["availablePackages"]
-                        .as_array()
-                        .ok_or(Error::InvalidResponse)?
-                        .iter()
-                        .find(|p| p["id"].as_str() == Some(&id))
-                        .ok_or(Error::InvalidInput(
-                            "Plan not found in this category. Run plans --category <ID>",
-                        ))?;
-                    let response = client.subscribe(
-                        &account.msisdn,
-                        &account.access_token,
-                        device_id,
-                        plan,
-                    )?;
-                    Ok((
-                        response,
-                        text(&plan["displayInfo"]["displayName"]).trim().to_owned(),
-                    ))
-                })?;
+            // Look up the plan first so the prompt can show its real name and price.
+            let (plan, name, price) = authenticated(runtime.client()?, |client, account, _| {
+                let catalog =
+                    client.search_plans(&account.msisdn, &account.access_token, category, "")?;
+                let plan = catalog["availablePackages"]
+                    .as_array()
+                    .ok_or(Error::InvalidResponse)?
+                    .iter()
+                    .find(|p| {
+                        p["id"].as_str().is_some_and(|found| found == id)
+                            || p["id"]
+                                .as_u64()
+                                .is_some_and(|found| found.to_string() == id)
+                    })
+                    .cloned()
+                    .ok_or(Error::InvalidInput(
+                        "Plan not found in this category. Run plans --category <ID>",
+                    ))?;
+                let name = text(&plan["displayInfo"]["displayName"]).trim().to_owned();
+                let price = plan_price(&plan);
+                Ok((plan, name, price))
+            })?;
+            if dry_run {
+                output(
+                    args.json,
+                    json!({"dry_run": true, "id": id, "name": &name, "price": &price}),
+                    format!("Would subscribe to {name} for {price}."),
+                );
+                return Ok(());
+            }
+            confirm_subscribe(&name, &price, yes)?;
+            let response = authenticated(runtime.client()?, |client, account, device_id| {
+                client.subscribe(&account.msisdn, &account.access_token, device_id, &plan)
+            })?;
             if args.json {
                 script::emit_json(response);
             } else {
@@ -746,7 +824,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                     client.search_plans(
                         &account.msisdn,
                         &account.access_token,
-                        options.unwrap().category,
+                        options.ok_or(Error::InvalidResponse)?.category,
                         keyword,
                     )?
                 } else if profile {
@@ -816,14 +894,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                 );
                 println!("{}", "-".repeat(width + 38));
                 for plan in plans {
-                    let price = &plan["productOfferingPrice"];
-                    let price = if text(&price["priceUom"]) == "FREE" {
-                        "Free".into()
-                    } else {
-                        let amount = text(&price["price"]);
-                        let amount = amount.strip_suffix(".00").unwrap_or(amount);
-                        format!("Rs. {amount}")
-                    };
+                    let price = plan_price(plan);
                     println!(
                         "{:<6}  {:<width$}  {:>12}  {:>10}",
                         text(&plan["id"]),
@@ -841,7 +912,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                 for (label, value) in [
                     ("Name", text(&data["accountName"])),
                     ("SIM", text(&data["simType"])),
-                    ("Status", profile_status(text(&data["status"]))),
+                    ("Status", profile_status(&text(&data["status"])).into()),
                     (
                         "Plan",
                         text(&data["subscriberDetail"]["ratePlanDisplayName"]),
@@ -853,7 +924,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                     }
                 }
             } else {
-                print_balance(&data, &number);
+                print_balance(&data);
             }
         }
     }
@@ -915,6 +986,41 @@ fn open_docs(file: &std::path::Path) -> Result<()> {
         .spawn();
     command.map_err(|_| Error::Script("Could not open the documentation in a browser".into()))?;
     Ok(())
+}
+
+/// Human price for a plan pack, shared by the list and the buy prompt.
+fn plan_price(plan: &Value) -> String {
+    let price = &plan["productOfferingPrice"];
+    if text(&price["priceUom"]) == "FREE" {
+        return "Free".into();
+    }
+    let raw = text(&price["price"]);
+    let amount = raw.strip_suffix(".00").unwrap_or(&raw);
+    format!("Rs. {amount}")
+}
+
+/// Spending money needs an explicit yes: a flag for scripts, or a typed
+/// confirmation when a person is at the keyboard. Piped input can never confirm.
+fn confirm_subscribe(name: &str, price: &str, yes: bool) -> Result<()> {
+    if yes {
+        return Ok(());
+    }
+    if !io::stdin().is_terminal() {
+        return Err(Error::InvalidInput(
+            "Refusing to subscribe without --yes in non-interactive mode",
+        ));
+    }
+    eprint!("Subscribe to {name} for {price}? [y/N] ");
+    io::stderr().flush().map_err(|_| Error::Prompt)?;
+    let mut answer = String::new();
+    io::stdin()
+        .read_line(&mut answer)
+        .map_err(|_| Error::Prompt)?;
+    if matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+        Ok(())
+    } else {
+        Err(Error::InvalidInput("Subscription cancelled"))
+    }
 }
 
 fn login(client: Client, number: &str, verify: bool, activate: bool, json: bool) -> Result<()> {
@@ -995,10 +1101,13 @@ fn balance_amount(item: &Value, unit: &str) -> String {
     amount
 }
 
+/// Nepal is UTC+5:45.
+const NPT_OFFSET_SECS: i32 = 5 * 3600 + 45 * 60;
+
 fn status_date(value: &str) -> String {
     if let Ok(date) = chrono::DateTime::parse_from_rfc3339(value) {
         return date
-            .with_timezone(&chrono::FixedOffset::east_opt(5 * 3600 + 45 * 60).unwrap())
+            .with_timezone(&chrono::FixedOffset::east_opt(NPT_OFFSET_SECS).unwrap())
             .format("%b %d %Y %I:%M:%S %p")
             .to_string();
     }
@@ -1020,7 +1129,7 @@ fn empty_allowance(item: &Value) -> bool {
     item["hasUnlimitedResource"] != true && zero(&item["balance"]) && zero(&item["initialAmount"])
 }
 
-fn print_balance(data: &Value, _number: &str) {
+fn print_balance(data: &Value) {
     for (label, key, unit) in [
         ("Balance", "creditBalanceDetail", "creditUom"),
         ("Data", "aggregateDataBalance", "uom"),
@@ -1283,12 +1392,30 @@ fn task_failed(response: &Value) -> bool {
     response["success"] != true && !ncell_cli::api::already_claimed(response)
 }
 
-fn text(value: &Value) -> &str {
-    value.as_str().unwrap_or("")
+/// Server text always passes through here before it reaches the terminal,
+/// so pasted control characters or escape sequences from API responses
+/// can never inject terminal commands into one-shot output.
+fn text(value: &Value) -> std::borrow::Cow<'_, str> {
+    match value.as_str() {
+        Some(raw) if raw.chars().any(|ch| ch.is_control()) => raw
+            .chars()
+            .filter(|ch| !ch.is_control())
+            .collect::<String>()
+            .into(),
+        Some(raw) => std::borrow::Cow::Borrowed(raw),
+        None => std::borrow::Cow::Borrowed(""),
+    }
 }
 
 fn wait_between_games(delay: Duration, show_timer: bool) -> Result<()> {
     let visible = show_timer && io::stderr().is_terminal();
+    if !visible {
+        // No countdown to paint: sleep once instead of waking every 100ms.
+        if !delay.is_zero() {
+            std::thread::sleep(delay);
+        }
+        return Ok(());
+    }
     let start = Instant::now();
     let mut stderr = io::stderr().lock();
     loop {
@@ -1389,7 +1516,7 @@ fn sort_key(plan: &Value, sort: Sort) -> f64 {
         Sort::Price => (&plan["productOfferingPrice"]["price"], 1.0),
         Sort::Validity => (
             &plan["techInfo"]["validity"],
-            match text(&plan["techInfo"]["validityUom"]) {
+            match text(&plan["techInfo"]["validityUom"]).as_ref() {
                 "MINUTE" => 1.0,
                 "HOUR" => 60.0,
                 "DAY" => 1440.0,

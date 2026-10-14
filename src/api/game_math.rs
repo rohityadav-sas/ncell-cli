@@ -31,7 +31,8 @@ fn play(
         return Err(Error::InvalidResponse);
     }
     // Captured games have 20 levels and three lives; bound unexpected server loops.
-    for _ in 0..60 {
+    const MAX_QUESTIONS: u32 = 60;
+    for _ in 0..MAX_QUESTIONS {
         let question = request(web, endpoint, csrf, "get_question", None)?;
         if question["win"] == true || question["game_over"] == true {
             return Ok(question);
@@ -75,16 +76,26 @@ fn request(
         .multipart(form)
         .send()
         .map_err(Error::from_http)?;
-    let status = response.status();
-    let data: Value = response.json().map_err(|_| Error::InvalidResponse)?;
-    if !status.is_success() || data["success"] == false || !data["error"].is_null() {
+    let status = response.status().as_u16();
+    let data: Value = response.json().map_err(|_| {
+        if (200..300).contains(&status) {
+            Error::InvalidResponse
+        } else {
+            Error::CheckIn {
+                message: format!("Math game website returned HTTP {status}"),
+                status,
+                response: Box::new(Value::Null),
+            }
+        }
+    })?;
+    if !(200..300).contains(&status) || data["success"] == false || !data["error"].is_null() {
         return Err(Error::CheckIn {
             message: data["error"]
                 .as_str()
                 .or_else(|| data["message"].as_str())
                 .unwrap_or("Math game request failed")
                 .into(),
-            status: status.as_u16(),
+            status,
             response: Box::new(data),
         });
     }

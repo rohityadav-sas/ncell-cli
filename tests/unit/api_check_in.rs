@@ -21,7 +21,7 @@ fn scratch_reuses_cookie_and_sends_only_csrf_without_retrying_errors() {
         let reward = server
             .mock("POST", "/scratch")
             .match_header("cookie", "PHPSESSID=scratch")
-            .match_header("user-agent", mockito::Matcher::Missing)
+            .match_header("user-agent", "wv")
             .match_header("origin", mockito::Matcher::Missing)
             .match_header("referer", mockito::Matcher::Missing)
             .match_header("content-type", "application/x-www-form-urlencoded")
@@ -180,7 +180,7 @@ fn spin_uses_only_csrf_and_cookie_and_preserves_success_and_errors_without_retry
         let claim = server
             .mock("POST", "/fetchSpinReward.php")
             .match_header("cookie", "PHPSESSID=spin-session")
-            .match_header("user-agent", mockito::Matcher::Missing)
+            .match_header("user-agent", "wv")
             .match_header("referer", mockito::Matcher::Missing)
             .match_header("origin", mockito::Matcher::Missing)
             .match_body(mockito::Matcher::Regex(
@@ -214,11 +214,22 @@ fn tasks_use_minimal_headers_without_csrf_or_body() {
         .with_body(r#"{"success":true,"challenges":[],"summary":{"completed_today":0}}"#)
         .expect(1)
         .create();
-    let response = tasks(
-        &web_client().unwrap(),
-        &format!("{}/index.php", server.url()),
-        &format!("{}/api/challenge_status.php", server.url()),
-    )
+    let response = {
+        let web = web_client().unwrap();
+        // Same two requests the old tasks() helper made: load the page for
+        // cookies, then read the status endpoint (no CSRF, no body).
+        web.get(format!("{}/index.php", server.url()))
+            .send()
+            .unwrap()
+            .error_for_status()
+            .unwrap();
+        let game = GameSession {
+            web,
+            csrf: String::new(),
+            tokens: None,
+        };
+        game.tasks_at(&format!("{}/api/challenge_status.php", server.url()))
+    }
     .unwrap();
     assert_eq!(response["summary"]["completed_today"], 0);
     page.assert();
@@ -242,16 +253,17 @@ fn activity_sends_id_and_fresh_csrf_once() {
             .with_body(r#"{"success":true,"points_awarded":25,"new_token_balance":130,"new_week_points":6565}"#)
             .expect(2).create();
     let web = Client::builder().cookie_store(true).build().unwrap();
-    let result = submit(
-        &web,
-        &format!("{}/earnmore.php", server.url()),
-        &[1, 2],
-        &format!("{}/api", server.url()),
-        &mut |item| {
+    let (csrf, _) = bootstrap(&web, &format!("{}/earnmore.php", server.url())).unwrap();
+    let mut game = GameSession {
+        web,
+        csrf,
+        tokens: None,
+    };
+    let result = game
+        .claim_at(&[1, 2], &format!("{}/api", server.url()), &mut |item| {
             assert_eq!(claim.matched(), item["id"] == 2);
-        },
-    )
-    .unwrap();
+        })
+        .unwrap();
     assert_eq!(result[0]["response"]["points_awarded"], 25);
     page.assert();
     claim.assert();
@@ -276,14 +288,17 @@ fn check_in_uses_fresh_csrf_cookie_and_preserves_rejection_without_retry() {
         .expect(1)
         .create();
     let web = Client::builder().cookie_store(true).build().unwrap();
-    let response = submit(
-        &web,
-        &format!("{}/index.php", server.url()),
-        &[],
-        &format!("{}/api", server.url()),
-        &mut |_| panic!("Daily check-in must not emit task output"),
-    )
-    .unwrap();
+    let (csrf, _) = bootstrap(&web, &format!("{}/index.php", server.url())).unwrap();
+    let mut game = GameSession {
+        web,
+        csrf,
+        tokens: None,
+    };
+    let response = game
+        .claim_at(&[], &format!("{}/api", server.url()), &mut |_| {
+            panic!("Daily check-in must not emit task output")
+        })
+        .unwrap();
     assert_eq!(response["message"], "Already checked in today");
     page.assert();
     claim.assert();

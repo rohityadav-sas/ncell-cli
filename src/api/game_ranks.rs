@@ -1,23 +1,10 @@
-use super::check_in::{WEB_UA, web_client};
 use crate::error::{Error, Result};
 use scraper::{ElementRef, Html, Selector};
 use serde_json::{Value, json};
 
-pub fn game_ranks(url: &str) -> Result<Value> {
-    let web = web_client()?;
-    web.get(url)
-        .header("User-Agent", WEB_UA)
-        .send()
-        .map_err(Error::from_http)?
-        .error_for_status()
-        .map_err(Error::from_http)?;
-    fetch(&web)
-}
-
 pub(super) fn fetch(web: &reqwest::blocking::Client) -> Result<Value> {
     let html = web
         .get(super::game_endpoint("ranks.php"))
-        .header("User-Agent", WEB_UA)
         .send()
         .map_err(Error::from_http)?
         .error_for_status()
@@ -52,7 +39,9 @@ fn select(selector: &'static str) -> &'static Selector {
             .map(|s| (s, Selector::parse(s).unwrap()))
             .collect()
         });
-    &SELECTORS[selector]
+    SELECTORS
+        .get(selector)
+        .unwrap_or_else(|| panic!("unknown leaderboard selector: {selector}"))
 }
 fn text(root: ElementRef<'_>, selector: &'static str) -> String {
     root.select(select(selector))

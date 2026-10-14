@@ -1,6 +1,18 @@
 use super::*;
 use serde_json::json;
 
+/// Test helper that fetches catalogs and merges overlapping memberships by pack ID.
+fn unique_packs(
+    response: &serde_json::Value,
+    mut fetch: impl FnMut(u64) -> std::result::Result<serde_json::Value, String>,
+) -> std::result::Result<Vec<Suggestion>, String> {
+    let fetched = supported_category_ids(response)?
+        .into_iter()
+        .map(|category| fetch(category).map(|response| (category, response)))
+        .collect::<Result<Vec<_>, _>>()?;
+    merge_fetched_packs(fetched)
+}
+
 fn options(input: &str, explicit: bool) -> Completion {
     Completer::new().complete(input, input.len(), explicit, &[])
 }

@@ -14,14 +14,30 @@ fn main() -> std::process::ExitCode {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(ncell_cli::error::Error::GameLost) => std::process::ExitCode::FAILURE,
         Err(error) => {
+            // Every --json failure is one envelope on stderr: scripts only watch one stream.
             if json {
-                if let ncell_cli::error::Error::Api { response, .. }
-                | ncell_cli::error::Error::CheckIn { response, .. }
-                | ncell_cli::error::Error::GameTasks { response } = &error
-                {
-                    println!("{response:#}");
-                } else {
-                    eprintln!("{:#}", serde_json::json!({"error": error.to_string()}));
+                match &error {
+                    ncell_cli::error::Error::Api {
+                        status,
+                        code,
+                        response,
+                    } => eprintln!(
+                        "{}",
+                        serde_json::json!({"error": error.to_string(), "status": status, "code": code, "response": response})
+                    ),
+                    ncell_cli::error::Error::CheckIn {
+                        message,
+                        status,
+                        response,
+                    } => eprintln!(
+                        "{}",
+                        serde_json::json!({"error": message, "status": status, "response": response})
+                    ),
+                    ncell_cli::error::Error::GameTasks { response } => eprintln!(
+                        "{}",
+                        serde_json::json!({"error": error.to_string(), "response": response})
+                    ),
+                    _ => eprintln!("{}", serde_json::json!({"error": error.to_string()})),
                 }
             } else {
                 eprintln!("Error: {error}");
