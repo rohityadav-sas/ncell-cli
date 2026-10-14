@@ -55,7 +55,7 @@ enum Command {
         #[command(subcommand)]
         action: AccountCommand,
     },
-    /// Show local session status
+    /// Show session status
     Status,
     /// Remove the active account
     Logout,

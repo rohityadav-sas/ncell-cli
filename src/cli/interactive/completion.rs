@@ -330,6 +330,11 @@ impl Completer {
                         '›',
                     ));
                 }
+                if path.is_empty() && "clear".starts_with(prefix) {
+                    result
+                        .suggestions
+                        .push(Suggestion::new("clear", "Clear the screen", '›'));
+                }
             }
             if !end_options && (prefix.is_empty() || prefix.starts_with('-')) {
                 let mut flags = command

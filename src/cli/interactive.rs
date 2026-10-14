@@ -4,7 +4,7 @@ use super::{Args, Command, Runtime, run_with, script};
 use clap::Parser;
 use completion::{Completer, Completion, Suggestion};
 use crossterm::{
-    cursor::{Hide, MoveToColumn, MoveUp, Show},
+    cursor::{Hide, MoveTo, MoveToColumn, MoveUp, Show},
     event::{
         self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEvent, KeyEventKind,
         KeyModifiers,
@@ -420,6 +420,7 @@ struct Editor {
 enum Action {
     Continue,
     Submit,
+    Clear,
     Exit,
 }
 fn suggestion_shortcut(key: KeyEvent) -> bool {
@@ -568,6 +569,9 @@ impl Editor {
                 }
                 if self.input.trim() == "exit" || self.input.trim() == "ncell exit" {
                     return Action::Exit;
+                }
+                if self.input.trim() == "clear" || self.input.trim() == "ncell clear" {
+                    return Action::Clear;
                 }
                 if !self.input.trim().is_empty() {
                     return Action::Submit;
@@ -1248,6 +1252,11 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
             guard.pause().map_err(fail)?;
             println!("{}", paint(MUTED, "  Goodbye.\n"));
             return Ok(());
+        }
+        if action == Action::Clear {
+            queue!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0)).map_err(fail)?;
+            editor.submitted();
+            continue;
         }
         let parsed = match parse_line(&editor.input) {
             Err(ParseError::Message(message)) => {

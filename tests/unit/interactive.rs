@@ -54,6 +54,18 @@ fn enter_submits_an_exact_sort_completion_instead_of_reaccepting_forever() {
 }
 
 #[test]
+fn clear_empties_the_screen_without_executing() {
+    let root = Completer::new().complete("", 0, true, &[]);
+    assert!(root.suggestions.iter().any(|item| item.value == "clear"));
+    let mut editor = self::editor("clear");
+    assert_eq!(
+        editor.key(key(KeyCode::Enter), &completion(&editor)),
+        Action::Clear
+    );
+    assert!(parse_line("clear").is_err());
+}
+
+#[test]
 fn sort_acceptance_keeps_cursor_in_value_for_comma_continuation() {
     let mut editor = editor("plans --sort pri");
     editor.key(key(KeyCode::Tab), &completion(&editor));
