@@ -11,7 +11,10 @@ use crossterm::{
     },
     execute, queue,
     style::ResetColor,
-    terminal::{self, BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate},
+    terminal::{
+        self, BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate,
+        EnterAlternateScreen, LeaveAlternateScreen,
+    },
 };
 use ncell_cli::{
     auth::AuthService,
@@ -193,6 +196,20 @@ pub(super) fn welcome(columns: usize) -> String {
 }
 
 type PanicHook = Arc<dyn Fn(&std::panic::PanicHookInfo<'_>) + Send + Sync>;
+/// Alternate-screen guard: entering keeps the outer shellOr scrollback
+/// untouched, and dropping always restores it, even on early returns.
+struct AlternateScreen;
+impl AlternateScreen {
+    fn enter() -> io::Result<Self> {
+        execute!(io::stdout(), EnterAlternateScreen)?;
+        Ok(Self)
+    }
+}
+impl Drop for AlternateScreen {
+    fn drop(&mut self) {
+        let _ = execute!(io::stdout(), LeaveAlternateScreen);
+    }
+}
 struct TerminalGuard {
     active: bool,
     previous_hook: Option<PanicHook>,
@@ -203,7 +220,13 @@ impl TerminalGuard {
         let panic_hook = previous_hook.clone();
         std::panic::set_hook(Box::new(move |info| {
             let _ = terminal::disable_raw_mode();
-            let _ = execute!(io::stdout(), ResetColor, Show, DisableBracketedPaste);
+            let _ = execute!(
+                io::stdout(),
+                LeaveAlternateScreen,
+                ResetColor,
+                Show,
+                DisableBracketedPaste
+            );
             panic_hook(info);
         }));
         let mut guard = Self {
@@ -411,9 +434,6 @@ struct Editor {
     explicit: bool,
     dismissed: bool,
     all_selected: bool,
-    history: Vec<String>,
-    history_index: Option<usize>,
-    draft: String,
     message: Option<String>,
 }
 #[derive(Debug, PartialEq, Eq)]
@@ -464,7 +484,6 @@ impl Editor {
         self.selected = 0;
         self.dismissed = false;
         self.explicit = false;
-        self.history_index = None;
     }
     fn accept(&mut self, completion: &Completion, item: &Suggestion) {
         self.input
@@ -528,28 +547,6 @@ impl Editor {
                         1
                     })
                     % length;
-            }
-            KeyCode::Up | KeyCode::Down => {
-                if !self.history.is_empty() {
-                    if self.history_index.is_none() {
-                        self.draft = self.input.clone();
-                    }
-                    self.history_index = if key.code == KeyCode::Up {
-                        Some(
-                            self.history_index
-                                .map_or(0, |index| (index + 1).min(self.history.len() - 1)),
-                        )
-                    } else {
-                        self.history_index.and_then(|index| index.checked_sub(1))
-                    };
-                    self.input = self.history_index.map_or_else(
-                        || self.draft.clone(),
-                        |index| self.history[self.history.len() - 1 - index].clone(),
-                    );
-                    self.cursor = self.input.len();
-                    self.dismissed = true;
-                    self.all_selected = false;
-                }
             }
             KeyCode::Tab => {
                 if let Some(item) = selected {
@@ -645,7 +642,6 @@ impl Editor {
         self.selected = 0;
         self.dismissed = false;
         self.explicit = false;
-        self.history_index = None;
     }
     fn delete_word(&mut self) {
         let start = if self.all_selected {
@@ -663,21 +659,13 @@ impl Editor {
         self.changed();
     }
     fn submitted(&mut self) {
-        if self.history.last() != Some(&self.input) {
-            self.history.push(self.input.clone());
-        }
-        if self.history.len() > 200 {
-            self.history.remove(0);
-        }
         self.input.clear();
         self.cursor = 0;
         self.selected = 0;
         self.explicit = false;
         self.dismissed = false;
         self.all_selected = false;
-        self.history_index = None;
         self.message = None;
-        self.draft.clear();
     }
 }
 fn word_start(input: &str, mut cursor: usize) -> usize {
@@ -1166,11 +1154,15 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
             "Use --json on commands inside interactive mode",
         ));
     }
+    let mut guard = TerminalGuard::enter().map_err(fail)?;
+    // The whole session lives in the alternate screen: the outer shell's
+    // scrollback is never touched, and `clear` can wipe everything below.
+    // Dropping the guard below restores the outer screen on every exit path.
+    let alternate = AlternateScreen::enter().map_err(fail)?;
     println!(
         "{}",
         welcome(usize::from(terminal::size().unwrap_or((80, 24)).0))
     );
-    let mut guard = TerminalGuard::enter().map_err(fail)?;
     let mut editor = Editor::default();
     let completer = Completer::new();
     let mut categories = CategoryCache::default();
@@ -1249,12 +1241,17 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
                 Clear(ClearType::FromCursorDown)
             )
             .map_err(fail)?;
+            drop(alternate);
             guard.pause().map_err(fail)?;
             println!("{}", paint(MUTED, "  Goodbye.\n"));
             return Ok(());
         }
         if action == Action::Clear {
             queue!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0)).map_err(fail)?;
+            println!(
+                "{}",
+                welcome(usize::from(terminal::size().unwrap_or((80, 24)).0))
+            );
             editor.submitted();
             continue;
         }

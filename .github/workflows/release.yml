@@ -62,6 +62,9 @@ jobs:
           with zipfile.ZipFile(name, 'w', zipfile.ZIP_DEFLATED) as archive:
               archive.write('target/release/${{ matrix.binary }}', '${{ matrix.binary }}')
               archive.write('LICENSE', 'LICENSE')
+              for path in sorted(Path('docs').rglob('*')):
+                  if path.is_file():
+                      archive.write(path.as_posix(), path.as_posix())
       - name: Publish archive
         shell: bash
         run: |

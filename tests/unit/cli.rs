@@ -146,6 +146,7 @@ fn resource_actions_are_scoped_and_options_stay_with_their_action() {
         vec!["plans"],
         vec!["plans", "--category", "50"],
         vec!["plans", "categories"],
+        vec!["docs"],
         vec![
             "plans",
             "search",

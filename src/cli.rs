@@ -83,6 +83,8 @@ enum Command {
     },
     /// Rotate tokens
     Refresh,
+    /// Open documentation
+    Docs,
 }
 
 #[derive(Subcommand, Clone)]
@@ -591,6 +593,15 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                 "Tokens refreshed.",
             );
         }
+        Command::Docs => {
+            let file = docs_file()?;
+            open_docs(&file)?;
+            output(
+                args.json,
+                json!({"opened": file.to_string_lossy()}),
+                format!("Opened documentation at {}.", file.display()),
+            );
+        }
         Command::Login { number, verify } => {
             login(runtime.client()?, &number, verify, true, args.json)?
         }
@@ -839,6 +850,54 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+/// Packaged documentation page; resolvable from a release archive or a checkout.
+fn docs_file() -> Result<std::path::PathBuf> {
+    let candidates = [
+        std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(|dir| dir.join("docs/index.html"))),
+        std::env::current_dir()
+            .ok()
+            .map(|dir| dir.join("docs/index.html")),
+    ];
+    for candidate in candidates.into_iter().flatten() {
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+    Err(Error::Script(
+        "Documentation is not installed next to this binary".into(),
+    ))
+}
+
+/// Open a file in the default browser without waiting for it to close.
+fn open_docs(file: &std::path::Path) -> Result<()> {
+    #[cfg(target_os = "windows")]
+    let command = std::process::Command::new("rundll32.exe")
+        .arg("url.dll,FileProtocolHandler")
+        .arg(file)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+    #[cfg(target_os = "macos")]
+    let command = std::process::Command::new("open")
+        .arg(file)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    let command = std::process::Command::new("xdg-open")
+        .arg(file)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+    command.map_err(|_| Error::Script("Could not open the documentation in a browser".into()))?;
     Ok(())
 }
 
