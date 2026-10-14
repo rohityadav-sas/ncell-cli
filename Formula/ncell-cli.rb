@@ -3,7 +3,7 @@ class NcellCli < Formula
   homepage "https://rohityadav-sas.github.io/ncell-cli/"
   url "https://github.com/rohityadav-sas/ncell-cli/archive/refs/tags/v0.4.0.tar.gz"
   version "0.4.0"
-  sha256 "551d9b17997c63d7ee6b49bd4c15d2c8ec27ceba044f2836d20bfc40e7245467"
+  sha256 "003f225363794fbb2a1a8c1ab74e34b9a70b2fc730b23734e2ef40b177ba457c"
   license "MIT"
 
   depends_on "rust" => :build

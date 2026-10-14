@@ -6,7 +6,7 @@
   "architecture": {
     "64bit": {
       "url": "https://github.com/rohityadav-sas/ncell-cli/releases/download/v0.4.3/ncell-cli-v0.4.3-windows-x86_64.zip",
-      "hash": "1f976c97a946986635fd9216a983e38d35f804d79d5dd135936c8c5ef6926188"
+      "hash": "c8e72a4f4d157209d578942e5b8803b39492cf1448a559d345d4453ddce2cef9"
     }
   },
   "description": "Ncell Nepal CLI for OTP login, balances, plans and free SMS."
