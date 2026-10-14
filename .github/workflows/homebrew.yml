@@ -42,6 +42,6 @@ jobs:
           Expand-Archive $zip.FullName -DestinationPath smoke/extracted
           if (-not (Test-Path smoke/extracted/LICENSE)) { throw 'MIT license missing' }
           $version = & ./smoke/extracted/ncell.exe --version
-          if ($LASTEXITCODE -ne 0 -or $version -ne "ncell $expected") { throw 'Version check failed' }
+          if ($LASTEXITCODE -ne 0 -or $version -ne "ncell-cli $expected") { throw 'Version check failed' }
           & ./smoke/extracted/ncell.exe --help
           if ($LASTEXITCODE -ne 0) { throw 'Help check failed' }
