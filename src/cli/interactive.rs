@@ -22,6 +22,7 @@ use ncell_cli::{
     session::{KeyringStore, SessionStore},
 };
 use std::{
+    cell::Cell,
     io::{self, IsTerminal, Write},
     process::Stdio,
     sync::{
@@ -460,6 +461,8 @@ struct Transcript {
     current: String,
     pending_cr: bool,
     scroll: usize,
+    // Lines below the transcript (prompt plus dropdown), set by `draw`.
+    chrome: Cell<usize>,
 }
 impl Transcript {
     fn push_str(&mut self, text: &str) {
@@ -494,16 +497,15 @@ impl Transcript {
             .saturating_sub(self.scroll.min(all.len().saturating_sub(rows)));
         all[end.saturating_sub(rows)..end].to_vec()
     }
-    fn scroll_by(&mut self, delta: isize, rows: usize) {
-        let max = self.lines.len().saturating_sub(rows);
+    fn scroll_by(&mut self, delta: isize, height: usize) {
+        let total = self.lines.len() + usize::from(!self.current.is_empty()) + self.chrome.get();
+        let max = total.saturating_sub(height);
         self.scroll = self.scroll.saturating_add_signed(delta).min(max);
     }
 }
 
 fn view_height() -> usize {
-    usize::from(terminal::size().unwrap_or((80, 24)).1)
-        .saturating_sub(1)
-        .max(1)
+    usize::from(terminal::size().unwrap_or((80, 24)).1).max(1)
 }
 fn banner() -> String {
     format!(
@@ -1219,6 +1221,7 @@ fn draw(
     completion: &Completion,
     cache: &CategoryCache,
     transcript: &Transcript,
+    reserved: &mut usize,
 ) -> io::Result<()> {
     let (columns, height) = terminal::size().unwrap_or((80, 24));
     let height = usize::from(height);
@@ -1273,10 +1276,32 @@ fn draw(
     );
     rows.extend(hints);
     rows.truncate(height.saturating_sub(1));
-    // The transcript fills whatever the prompt and dropdown don't need.
-    let view_rows = height.saturating_sub(1 + rows.len()).max(1);
-    let shown = transcript.visible(view_rows, false);
-    let prompt_row = shown.len();
+    // Keep the tallest block seen since the last command so the prompt never
+    // slides back down when the dropdown shrinks.
+    *reserved = (*reserved).max(rows.len()).min(height.saturating_sub(1));
+    rows.resize(*reserved, String::new());
+
+    let prompt_line = format!(
+        "{}{}",
+        paint(TEAL, &prompt),
+        if editor.all_selected {
+            selection(&displayed)
+        } else {
+            command_colors(&displayed)
+        }
+    );
+    // Transcript, prompt and dropdown form one scrollable column of lines.
+    let mut content: Vec<&str> = transcript.lines.iter().map(String::as_str).collect();
+    if !transcript.current.is_empty() {
+        content.push(&transcript.current);
+    }
+    let prompt_index = content.len();
+    content.push(&prompt_line);
+    content.extend(rows.iter().map(String::as_str));
+    let total = content.len();
+    transcript.chrome.set(total - prompt_index);
+    let end = total - transcript.scroll.min(total.saturating_sub(height));
+    let start = end.saturating_sub(height);
 
     let mut frame: Vec<u8> = Vec::with_capacity(4096);
     queue!(
@@ -1286,34 +1311,22 @@ fn draw(
         MoveTo(0, 0),
         Clear(ClearType::All)
     )?;
-    for (row, line) in shown.iter().enumerate() {
+    for (row, line) in content[start..end].iter().enumerate() {
         queue!(frame, MoveTo(0, row as u16))?;
         write!(frame, "{}", clip_ansi(line, full_width).0)?;
     }
-    queue!(frame, MoveTo(0, prompt_row as u16))?;
-    write!(
-        frame,
-        "{}{}",
-        paint(TEAL, &prompt),
-        if editor.all_selected {
-            selection(&displayed)
-        } else {
-            command_colors(&displayed)
-        }
-    )?;
-    for (index, row) in rows.iter().enumerate() {
-        queue!(frame, MoveTo(0, (prompt_row + 1 + index) as u16))?;
-        write!(frame, "{row}")?;
+    // Show the cursor only while the prompt is on screen.
+    if (start..end).contains(&prompt_index) {
+        queue!(
+            frame,
+            MoveTo(
+                (prompt_width + width(&editor.input[offset..editor.cursor])) as u16,
+                (prompt_index - start) as u16
+            ),
+            Show
+        )?;
     }
-    queue!(
-        frame,
-        MoveTo(
-            (prompt_width + width(&editor.input[offset..editor.cursor])) as u16,
-            prompt_row as u16
-        ),
-        Show,
-        EndSynchronizedUpdate
-    )?;
+    queue!(frame, EndSynchronizedUpdate)?;
     let mut output = io::stdout().lock();
     output.write_all(&frame)?;
     output.flush()
@@ -1381,6 +1394,7 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
     let completer = Completer::new();
     let mut categories = CategoryCache::default();
     let mut packs = CategoryCache::default();
+    let mut reserved = 0usize;
     let mut dirty = true;
     loop {
         dirty |= categories.poll();
@@ -1407,6 +1421,7 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
                     &categories
                 },
                 &transcript,
+                &mut reserved,
             )
             .map_err(fail)?;
             dirty = false;
@@ -1489,6 +1504,7 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
             transcript.push_str(&banner());
             trace("branch-clear-painted");
             editor.submitted();
+            reserved = 0;
             continue;
         }
         let parsed = match parse_line(&editor.input) {
@@ -1540,6 +1556,7 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
         }
         transcript.push_str("\n");
         editor.submitted();
+        reserved = 0;
         // Do not interpret the Enter/keyup left by an OTP or external editor as a new command.
         while event::poll(Duration::ZERO).map_err(fail)? {
             let _ = event::read().map_err(fail)?;
