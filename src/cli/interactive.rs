@@ -1504,7 +1504,6 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
             transcript.push_str(&banner());
             trace("branch-clear-painted");
             editor.submitted();
-            reserved = 0;
             continue;
         }
         let parsed = match parse_line(&editor.input) {
@@ -1556,7 +1555,6 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
         }
         transcript.push_str("\n");
         editor.submitted();
-        reserved = 0;
         // Do not interpret the Enter/keyup left by an OTP or external editor as a new command.
         while event::poll(Duration::ZERO).map_err(fail)? {
             let _ = event::read().map_err(fail)?;
