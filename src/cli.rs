@@ -855,18 +855,27 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
 
 /// Packaged documentation page; resolvable from a release archive or a checkout.
 fn docs_file() -> Result<std::path::PathBuf> {
-    let candidates = [
-        std::env::current_exe()
-            .ok()
-            .and_then(|exe| exe.parent().map(|dir| dir.join("docs/index.html"))),
-        std::env::current_dir()
-            .ok()
-            .map(|dir| dir.join("docs/index.html")),
-    ];
-    for candidate in candidates.into_iter().flatten() {
-        if candidate.is_file() {
-            return Ok(candidate);
-        }
+    let from_exe = std::env::current_exe().ok().and_then(|exe| {
+        exe.parent()
+            .map(|dir| dir.join("docs/index.html"))
+            .filter(|page| page.is_file())
+            .or_else(|| {
+                // Cargo target layout when running from a source checkout.
+                exe.parent().and_then(|dir| {
+                    let page: std::path::PathBuf =
+                        dir.join("../../docs/index.html").components().collect();
+                    page.is_file().then_some(page)
+                })
+            })
+    });
+    if let Some(page) = from_exe {
+        return Ok(page);
+    }
+    let nearby = std::env::current_dir()
+        .ok()
+        .map(|dir| dir.join("docs/index.html"));
+    if let Some(page) = nearby.filter(|page| page.is_file()) {
+        return Ok(page);
     }
     Err(Error::Script(
         "Documentation is not installed next to this binary".into(),

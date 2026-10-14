@@ -4,17 +4,14 @@ use super::{Args, Command, Runtime, run_with, script};
 use clap::Parser;
 use completion::{Completer, Completion, Suggestion};
 use crossterm::{
-    cursor::{Hide, MoveTo, MoveToColumn, MoveUp, Show},
+    cursor::{Hide, MoveToColumn, MoveUp, Show},
     event::{
         self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEvent, KeyEventKind,
         KeyModifiers,
     },
     execute, queue,
     style::ResetColor,
-    terminal::{
-        self, BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate,
-        EnterAlternateScreen, LeaveAlternateScreen,
-    },
+    terminal::{self, BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate},
 };
 use ncell_cli::{
     auth::AuthService,
@@ -196,20 +193,6 @@ pub(super) fn welcome(columns: usize) -> String {
 }
 
 type PanicHook = Arc<dyn Fn(&std::panic::PanicHookInfo<'_>) + Send + Sync>;
-/// Alternate-screen guard: entering keeps the outer shellOr scrollback
-/// untouched, and dropping always restores it, even on early returns.
-struct AlternateScreen;
-impl AlternateScreen {
-    fn enter() -> io::Result<Self> {
-        execute!(io::stdout(), EnterAlternateScreen)?;
-        Ok(Self)
-    }
-}
-impl Drop for AlternateScreen {
-    fn drop(&mut self) {
-        let _ = execute!(io::stdout(), LeaveAlternateScreen);
-    }
-}
 struct TerminalGuard {
     active: bool,
     previous_hook: Option<PanicHook>,
@@ -220,13 +203,7 @@ impl TerminalGuard {
         let panic_hook = previous_hook.clone();
         std::panic::set_hook(Box::new(move |info| {
             let _ = terminal::disable_raw_mode();
-            let _ = execute!(
-                io::stdout(),
-                LeaveAlternateScreen,
-                ResetColor,
-                Show,
-                DisableBracketedPaste
-            );
+            let _ = execute!(io::stdout(), ResetColor, Show, DisableBracketedPaste);
             panic_hook(info);
         }));
         let mut guard = Self {
@@ -1155,10 +1132,9 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
         ));
     }
     let mut guard = TerminalGuard::enter().map_err(fail)?;
-    // The whole session lives in the alternate screen: the outer shell's
-    // scrollback is never touched, and `clear` can wipe everything below.
-    // Dropping the guard below restores the outer screen on every exit path.
-    let alternate = AlternateScreen::enter().map_err(fail)?;
+    // Fresh viewport on entry so the first frame matches a cleared screen:
+    // ANSI clear keeps the outer shell in the scrollback instead of erasing it.
+    print!("\x1b[2J\x1b[1;1H");
     println!(
         "{}",
         welcome(usize::from(terminal::size().unwrap_or((80, 24)).0))
@@ -1241,13 +1217,11 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
                 Clear(ClearType::FromCursorDown)
             )
             .map_err(fail)?;
-            drop(alternate);
             guard.pause().map_err(fail)?;
-            println!("{}", paint(MUTED, "  Goodbye.\n"));
             return Ok(());
         }
         if action == Action::Clear {
-            queue!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0)).map_err(fail)?;
+            print!("\x1b[2J\x1b[1;1H");
             println!(
                 "{}",
                 welcome(usize::from(terminal::size().unwrap_or((80, 24)).0))
