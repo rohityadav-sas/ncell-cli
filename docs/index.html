@@ -765,12 +765,10 @@ brew install ncell-cli</code></pre>
 
             <p>
 
-                Tokens and device identity are stored under service
-
-                <code>ncell-cli</code>, entry
-                <code>session</code>, in your
-
-                OS's native credential store.
+                Tokens and device identity are stored in a local session file
+                (<code>%LOCALAPPDATA%\ncell-cli\session.json</code> on Windows,
+                <code>~/Library/Application Support/ncell-cli/</code> on macOS,
+                <code>~/.config/ncell-cli/</code> on Linux) readable only by you.
 
             </p>
 

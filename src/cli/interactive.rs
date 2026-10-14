@@ -19,7 +19,7 @@ use crossterm::{
 use ncell_cli::{
     auth::AuthService,
     error::{Error, Result},
-    session::{KeyringStore, SessionStore},
+    session::{FileStore, SessionStore},
 };
 use std::{
     cell::Cell,
@@ -344,7 +344,7 @@ impl CategoryCache {
         // and on a 401/LGN2001 rotate once, re-snapshot, and retry.
         std::thread::spawn(move || {
             let snapshot = || -> std::result::Result<(String, String), String> {
-                let store = KeyringStore::new().map_err(|error| error.to_string())?;
+                let store = FileStore::new().map_err(|error| error.to_string())?;
                 let account = store
                     .load()
                     .map_err(|error| error.to_string())?
@@ -353,7 +353,7 @@ impl CategoryCache {
                 Ok((account.msisdn, account.access_token))
             };
             let rotate_once = || -> std::result::Result<(), String> {
-                let store = KeyringStore::new().map_err(|error| error.to_string())?;
+                let store = FileStore::new().map_err(|error| error.to_string())?;
                 AuthService::new(client.clone(), store)
                     .refresh()
                     .map_err(|error| error.to_string())

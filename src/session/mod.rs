@@ -1,6 +1,6 @@
 mod storage;
 use serde::{Deserialize, Serialize};
-pub use storage::{KeyringStore, SessionStore};
+pub use storage::{FileStore, SessionStore};
 
 // Deliberately no Debug implementation: this object contains credentials.
 #[derive(Default, Serialize, Deserialize)]

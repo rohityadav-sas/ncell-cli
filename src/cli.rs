@@ -6,7 +6,7 @@ use ncell_cli::{
     api::{Client, DEFAULT_PLAN_CATEGORY},
     auth::{AuthService, normalize_number},
     error::{Error, Result},
-    session::{Account, KeyringStore, SessionStore},
+    session::{Account, FileStore, SessionStore},
 };
 use serde_json::{Value, json};
 use std::io::{self, IsTerminal, Write};
@@ -265,14 +265,14 @@ impl Runtime {
     }
     fn game(&mut self) -> Result<&mut ncell_cli::api::GameSession> {
         let client = self.client()?;
-        let session = KeyringStore::new()?.load()?.ok_or(Error::NotLoggedIn)?;
+        let session = FileStore::new()?.load()?.ok_or(Error::NotLoggedIn)?;
         let account = session.account.as_ref().ok_or(Error::NotLoggedIn)?;
         let identity = format!(
             "{}:{}:{}",
             account.msisdn, session.device_id, account.access_token
         );
         self.cached_game(identity, || {
-            let (url, identity) = AuthService::new(client, KeyringStore::new()?).authenticated(
+            let (url, identity) = AuthService::new(client, FileStore::new()?).authenticated(
                 |client, account, device| {
                     Ok((
                         client.check_in_url(&account.msisdn, &account.access_token)?,
@@ -586,7 +586,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
             }
         }
         Command::Refresh => {
-            AuthService::new(runtime.client()?, KeyringStore::new()?).refresh()?;
+            AuthService::new(runtime.client()?, FileStore::new()?).refresh()?;
             output(
                 args.json,
                 json!({"refreshed": true, "session_saved": true, "mobile_sync_required": true}),
@@ -606,7 +606,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
             login(runtime.client()?, &number, verify, true, args.json)?
         }
         Command::Account { action } => {
-            let store = KeyringStore::new()?;
+            let store = FileStore::new()?;
             let mut session = store.load()?.unwrap_or_default();
             match action {
                 AccountCommand::Add { number, verify } => {
@@ -668,7 +668,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
             }
         }
         Command::Status => {
-            let account = KeyringStore::new()?.load()?.and_then(|s| s.account);
+            let account = FileStore::new()?.load()?.and_then(|s| s.account);
             match account {
                 Some(a) => output(
                     args.json,
@@ -694,8 +694,15 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
             }
         }
         Command::Logout => {
-            let store = KeyringStore::new()?;
-            let mut session = store.load()?.unwrap_or_default();
+            let store = FileStore::new()?;
+            let mut session = match store.load() {
+                Err(Error::InvalidSession) => {
+                    store.clear()?;
+                    None
+                }
+                session => session?,
+            }
+            .unwrap_or_default();
             session.logout();
             store.save(&session)?;
             output(
@@ -911,7 +918,7 @@ fn open_docs(file: &std::path::Path) -> Result<()> {
 }
 
 fn login(client: Client, number: &str, verify: bool, activate: bool, json: bool) -> Result<()> {
-    let auth = AuthService::new(client, KeyringStore::new()?);
+    let auth = AuthService::new(client, FileStore::new()?);
     let command = if activate { "login" } else { "account add" };
     if !verify {
         auth.request_otp(number)?;
@@ -930,7 +937,7 @@ fn login(client: Client, number: &str, verify: bool, activate: bool, json: bool)
         json,
         json!({"msisdn":normalize_number(number)?,"session_saved":true,"made_active":activate}),
         if activate {
-            "Logged in. Session saved in your system credential store."
+            "Logged in. Session saved in the local session file."
         } else {
             "Account saved. Active account unchanged."
         },
@@ -1117,7 +1124,7 @@ fn authenticated<T>(
     client: Client,
     request: impl Fn(&Client, &Account, &str) -> Result<T>,
 ) -> Result<T> {
-    AuthService::new(client, KeyringStore::new()?).authenticated(request)
+    AuthService::new(client, FileStore::new()?).authenticated(request)
 }
 
 fn print_ranks(response: &Value) {

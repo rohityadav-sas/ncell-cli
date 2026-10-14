@@ -30,7 +30,7 @@ pub enum Error {
     GameTasks { response: Box<serde_json::Value> },
     #[error("Math game lost")]
     GameLost,
-    #[error("Credential storage is unavailable or locked; unlock your system keyring and retry")]
+    #[error("Could not read or write the saved session file")]
     Storage,
     #[error("Another command is using the saved accounts. Wait for it to finish and retry")]
     SessionBusy,
