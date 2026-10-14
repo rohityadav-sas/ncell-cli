@@ -4,7 +4,7 @@ use super::{Args, Command, Runtime, run_with, script};
 use clap::Parser;
 use completion::{Completer, Completion, Suggestion};
 use crossterm::{
-    cursor::{Hide, MoveTo, Show},
+    cursor::{Hide, MoveTo, MoveToColumn, Show},
     event::{
         self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
         Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEventKind,
@@ -1399,9 +1399,6 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
         ));
     }
     let mut guard = TerminalGuard::enter().map_err(fail)?;
-    // Raw mode is off while a command runs, so Ctrl+C is a real signal. Swallow it here;
-    // the child shares the console and still dies from it, which ends the capture loop.
-    let _ = ctrlc::set_handler(|| {});
     let mut transcript = Transcript::default();
     transcript.push_str(&banner());
     let mut editor = Editor::default();
@@ -1551,6 +1548,12 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
                 );
                 if runs_locally(&args.command) {
                     guard.pause().map_err(fail)?;
+                    queue!(
+                        io::stdout(),
+                        MoveToColumn(0),
+                        Clear(ClearType::FromCursorDown)
+                    )
+                    .map_err(fail)?;
                     println!("{}{}\n", paint(TEAL, PROMPT), command_colors(&editor.input));
                     let json = args.json;
                     if let Err(error) = run_with(args, runtime) {
