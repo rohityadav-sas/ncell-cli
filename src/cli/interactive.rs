@@ -442,6 +442,9 @@ struct Editor {
     explicit: bool,
     dismissed: bool,
     all_selected: bool,
+    history: Vec<String>,
+    history_index: Option<usize>,
+    draft: String,
     message: Option<String>,
 }
 #[derive(Debug, PartialEq, Eq)]
@@ -696,6 +699,7 @@ impl Editor {
         self.selected = 0;
         self.dismissed = false;
         self.explicit = false;
+        self.history_index = None;
     }
     fn accept(&mut self, completion: &Completion, item: &Suggestion) {
         self.input
@@ -759,6 +763,28 @@ impl Editor {
                         1
                     })
                     % length;
+            }
+            KeyCode::Up | KeyCode::Down => {
+                if !self.history.is_empty() {
+                    if self.history_index.is_none() {
+                        self.draft = self.input.clone();
+                    }
+                    self.history_index = if key.code == KeyCode::Up {
+                        Some(
+                            self.history_index
+                                .map_or(0, |index| (index + 1).min(self.history.len() - 1)),
+                        )
+                    } else {
+                        self.history_index.and_then(|index| index.checked_sub(1))
+                    };
+                    self.input = self.history_index.map_or_else(
+                        || self.draft.clone(),
+                        |index| self.history[self.history.len() - 1 - index].clone(),
+                    );
+                    self.cursor = self.input.len();
+                    self.dismissed = true;
+                    self.all_selected = false;
+                }
             }
             KeyCode::Tab => {
                 if let Some(item) = selected {
@@ -860,6 +886,7 @@ impl Editor {
         self.selected = 0;
         self.dismissed = false;
         self.explicit = false;
+        self.history_index = None;
     }
     fn delete_word(&mut self) {
         let start = if self.all_selected {
@@ -877,12 +904,19 @@ impl Editor {
         self.changed();
     }
     fn submitted(&mut self) {
+        if self.history.last() != Some(&self.input) {
+            self.history.push(self.input.clone());
+        }
+        if self.history.len() > 200 {
+            self.history.remove(0);
+        }
         self.input.clear();
         self.cursor = 0;
         self.selected = 0;
         self.explicit = false;
         self.dismissed = false;
         self.all_selected = false;
+        self.history_index = None;
         self.message = None;
     }
 }

@@ -155,11 +155,13 @@ fn ctrl_backspace_and_unicode_editing_preserve_utf8_boundaries() {
 }
 
 #[test]
-fn arrows_do_nothing_without_suggestions_and_ignore_key_release_events() {
-    let mut editor = self::editor("sms ");
+fn history_keeps_draft_and_ignores_key_release_events() {
+    let mut editor = editor("balance");
+    editor.submitted();
+    editor.insert("sms ");
     editor.dismissed = true;
     editor.key(key(KeyCode::Up), &completion(&editor));
-    assert_eq!(editor.input, "sms ");
+    assert_eq!(editor.input, "balance");
     editor.key(key(KeyCode::Down), &completion(&editor));
     assert_eq!(editor.input, "sms ");
     editor.key(
