@@ -4,7 +4,7 @@ use super::{Args, Command, Runtime, run_with, script};
 use clap::Parser;
 use completion::{Completer, Completion, Suggestion};
 use crossterm::{
-    cursor::{Hide, MoveTo, MoveToColumn, MoveUp, RestorePosition, SavePosition, Show},
+    cursor::{Hide, MoveTo, MoveToColumn, MoveUp, Show, position},
     event::{
         self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEvent, KeyEventKind,
         KeyModifiers,
@@ -435,17 +435,22 @@ fn trace(marker: &str) {
         let _ = writeln!(file, "{marker}");
     }
 }
-/// Blank every visible row with spaces, then park at the top-left.
-/// Uses only cursor moves and spaces so it works even where erase
-/// sequences are ignored. Scrollback above the viewport is preserved.
-fn clear_viewport() -> io::Result<()> {
-    let (columns, rows) = terminal::size().unwrap_or((80, 24));
-    let blank: String = " ".repeat(columns as usize);
+/// Scroll everything currently on screen into the scrollback, then park at
+/// the top-left of a blank viewport. Nothing is erased, so outer shell
+/// history and this session's output both stay scrollable.
+fn scroll_off() -> io::Result<()> {
+    let (_, rows) = terminal::size().unwrap_or((80, 24));
+    let used = position()
+        .map_or(rows, |(_, row)| row.saturating_add(1))
+        .min(rows);
     let mut output = io::stdout();
-    for row in 0..rows {
-        queue!(output, MoveTo(0, row))?;
-        write!(output, "{blank}")?;
-    }
+    queue!(
+        output,
+        MoveToColumn(0),
+        Clear(ClearType::FromCursorDown),
+        MoveTo(0, rows.saturating_sub(1))
+    )?;
+    write!(output, "{}", "\n".repeat(usize::from(used)))?;
     queue!(output, MoveTo(0, 0))?;
     output.flush()
 }
@@ -1163,12 +1168,8 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
         ));
     }
     let mut guard = TerminalGuard::enter().map_err(fail)?;
-    // Remember where the session started so exit can erase exactly the
-    // session region without touching the outer shell above it.
-    execute!(io::stdout(), SavePosition).map_err(fail)?;
     // Fresh viewport on entry so the first frame matches a cleared screen.
-    // Spaces keep the outer shell in the scrollback instead of erasing it.
-    clear_viewport().map_err(fail)?;
+    scroll_off().map_err(fail)?;
     println!(
         "{}",
         welcome(usize::from(terminal::size().unwrap_or((80, 24)).0))
@@ -1245,19 +1246,13 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
             continue;
         }
         if action == Action::Exit {
-            queue!(
-                io::stdout(),
-                RestorePosition,
-                MoveToColumn(0),
-                Clear(ClearType::FromCursorDown)
-            )
-            .map_err(fail)?;
+            scroll_off().map_err(fail)?;
             guard.pause().map_err(fail)?;
             return Ok(());
         }
         if action == Action::Clear {
             trace("branch-clear");
-            clear_viewport().map_err(fail)?;
+            scroll_off().map_err(fail)?;
             println!(
                 "{}",
                 welcome(usize::from(terminal::size().unwrap_or((80, 24)).0))
