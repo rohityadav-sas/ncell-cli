@@ -932,6 +932,12 @@ fn login(client: Client, number: &str, verify: bool, activate: bool, json: bool)
     if io::stdin().read_line(&mut otp).map_err(|_| Error::Prompt)? == 0 {
         return Err(Error::Prompt);
     }
+    // Under interactive capture the typed line never reaches the transcript
+    // (it goes straight to the console), so end the prompt row here. Plain
+    // one-shot runs keep their exact output.
+    if std::env::var_os("NCELL_CAPTURED").is_some() {
+        eprintln!();
+    }
     auth.verify_account(number, otp.trim(), activate)?;
     output(
         json,

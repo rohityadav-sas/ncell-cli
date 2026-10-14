@@ -618,6 +618,7 @@ fn run_captured(words: &[String], transcript: &mut Transcript) -> io::Result<()>
     command
         .args(words)
         .stdin(Stdio::inherit())
+        .env("NCELL_CAPTURED", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if colors_enabled() {
