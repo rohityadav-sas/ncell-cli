@@ -57,12 +57,17 @@ fn enter_submits_an_exact_sort_completion_instead_of_reaccepting_forever() {
 fn clear_empties_the_screen_without_executing() {
     let root = Completer::new().complete("", 0, true, &[]);
     assert!(root.suggestions.iter().any(|item| item.value == "clear"));
-    let mut editor = self::editor("clear");
-    assert_eq!(
-        editor.key(key(KeyCode::Enter), &completion(&editor)),
-        Action::Clear
-    );
+    assert!(!root.suggestions.iter().any(|item| item.value == "cls"));
+    for input in ["clear", "cls", "ncell cls"] {
+        let mut editor = self::editor(input);
+        assert_eq!(
+            editor.key(key(KeyCode::Enter), &completion(&editor)),
+            Action::Clear,
+            "{input}"
+        );
+    }
     assert!(parse_line("clear").is_err());
+    assert!(parse_line("cls").is_err());
 }
 
 #[test]

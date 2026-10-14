@@ -774,7 +774,11 @@ impl Editor {
                     trace("key-exit");
                     return Action::Exit;
                 }
-                if self.input.trim() == "clear" || self.input.trim() == "ncell clear" {
+                if self.input.trim() == "clear"
+                    || self.input.trim() == "ncell clear"
+                    || self.input.trim() == "cls"
+                    || self.input.trim() == "ncell cls"
+                {
                     trace("key-clear");
                     return Action::Clear;
                 }
