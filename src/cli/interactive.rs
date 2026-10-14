@@ -4,7 +4,7 @@ use super::{Args, Command, Runtime, run_with, script};
 use clap::Parser;
 use completion::{Completer, Completion, Suggestion};
 use crossterm::{
-    cursor::{Hide, MoveToColumn, MoveUp, Show},
+    cursor::{Hide, MoveTo, MoveToColumn, MoveUp, Show},
     event::{
         self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEvent, KeyEventKind,
         KeyModifiers,
@@ -420,6 +420,35 @@ enum Action {
     Clear,
     Exit,
 }
+/// Env-gated trace (NCELL_TRACE=1) for diagnosing interactive dispatch.
+/// Appends markers to %TEMP%\ncell-trace.log. Never enabled in normal runs.
+fn trace(marker: &str) {
+    if std::env::var_os("NCELL_TRACE").is_none() {
+        return;
+    }
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(std::env::temp_dir().join("ncell-trace.log"))
+    {
+        use std::io::Write as _;
+        let _ = writeln!(file, "{marker}");
+    }
+}
+/// Blank every visible row with spaces, then park at the top-left.
+/// Uses only cursor moves and spaces so it works even where erase
+/// sequences are ignored. Scrollback above the viewport is preserved.
+fn clear_viewport() -> io::Result<()> {
+    let (columns, rows) = terminal::size().unwrap_or((80, 24));
+    let blank: String = " ".repeat(columns as usize);
+    let mut output = io::stdout();
+    for row in 0..rows {
+        queue!(output, MoveTo(0, row))?;
+        write!(output, "{blank}")?;
+    }
+    queue!(output, MoveTo(0, 0))?;
+    output.flush()
+}
 fn suggestion_shortcut(key: KeyEvent) -> bool {
     matches!(key.code, KeyCode::Null | KeyCode::Char('\0'))
         || (key.modifiers.contains(KeyModifiers::CONTROL)
@@ -535,17 +564,19 @@ impl Editor {
                 }
             }
             KeyCode::Enter => {
+                if self.input.trim() == "exit" || self.input.trim() == "ncell exit" {
+                    trace("key-exit");
+                    return Action::Exit;
+                }
+                if self.input.trim() == "clear" || self.input.trim() == "ncell clear" {
+                    trace("key-clear");
+                    return Action::Clear;
+                }
                 if let Some(item) = selected
                     && (self.input[completion.replace.clone()] != item.value || item.continue_input)
                 {
                     self.accept(completion, item);
                     return Action::Continue;
-                }
-                if self.input.trim() == "exit" || self.input.trim() == "ncell exit" {
-                    return Action::Exit;
-                }
-                if self.input.trim() == "clear" || self.input.trim() == "ncell clear" {
-                    return Action::Clear;
                 }
                 if !self.input.trim().is_empty() {
                     return Action::Submit;
@@ -1132,9 +1163,9 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
         ));
     }
     let mut guard = TerminalGuard::enter().map_err(fail)?;
-    // Fresh viewport on entry so the first frame matches a cleared screen:
-    // ANSI clear keeps the outer shell in the scrollback instead of erasing it.
-    print!("\x1b[2J\x1b[1;1H");
+    // Fresh viewport on entry so the first frame matches a cleared screen.
+    // Spaces keep the outer shell in the scrollback instead of erasing it.
+    clear_viewport().map_err(fail)?;
     println!(
         "{}",
         welcome(usize::from(terminal::size().unwrap_or((80, 24)).0))
@@ -1221,11 +1252,13 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
             return Ok(());
         }
         if action == Action::Clear {
-            print!("\x1b[2J\x1b[1;1H");
+            trace("branch-clear");
+            clear_viewport().map_err(fail)?;
             println!(
                 "{}",
                 welcome(usize::from(terminal::size().unwrap_or((80, 24)).0))
             );
+            trace("branch-clear-painted");
             editor.submitted();
             continue;
         }
