@@ -197,19 +197,36 @@ pub fn already_checked_in(data: &Value) -> bool {
     message.contains("already checked")
 }
 
-fn decode(response: reqwest::blocking::Response, reward: bool) -> Result<Value> {
+/// Server-controlled game text, stripped of control characters at the boundary
+/// so no print site can leak terminal escapes into one-shot or error output.
+pub(super) fn clean_message(value: &str) -> String {
+    value.chars().filter(|ch| !ch.is_control()).collect()
+}
+
+/// Read a game JSON body together with its HTTP status. Non-JSON error pages
+/// (a 502 HTML page, a login redirect) report their status instead of a
+/// misleading "invalid response".
+pub(super) fn game_json(
+    response: reqwest::blocking::Response,
+    service: &str,
+) -> Result<(u16, Value)> {
     let status = response.status().as_u16();
     let data: Value = response.json().map_err(|_| {
         if (200..300).contains(&status) {
             Error::InvalidResponse
         } else {
             Error::CheckIn {
-                message: format!("Game website returned HTTP {status}"),
+                message: format!("{service} returned HTTP {status}"),
                 status,
                 response: Box::new(Value::Null),
             }
         }
     })?;
+    Ok((status, data))
+}
+
+fn decode(response: reqwest::blocking::Response, reward: bool) -> Result<Value> {
+    let (status, data) = game_json(response, "Game website")?;
     let success = if reward {
         data["value"].is_string()
             && (data["new_token_balance"].is_number() || data["points_remaining"].is_number())
@@ -221,11 +238,12 @@ fn decode(response: reqwest::blocking::Response, reward: bool) -> Result<Value> 
     };
     if !(200..300).contains(&status) || !success {
         return Err(Error::CheckIn {
-            message: data["message"]
-                .as_str()
-                .or_else(|| data["error"].as_str())
-                .unwrap_or("Game request failed")
-                .to_owned(),
+            message: clean_message(
+                data["message"]
+                    .as_str()
+                    .or_else(|| data["error"].as_str())
+                    .unwrap_or("Game request failed"),
+            ),
             status,
             response: Box::new(data),
         });

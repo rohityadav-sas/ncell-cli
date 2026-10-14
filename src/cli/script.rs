@@ -95,8 +95,10 @@ pub(super) fn script_directory() -> Result<PathBuf> {
 }
 fn script_name(file: &std::path::Path) -> Result<()> {
     // A bare file name (no folders) ending in .ncell: one comparison covers
-    // separators, drive prefixes and parent components alike.
+    // separators, drive prefixes and parent components alike. The ':' check
+    // stays explicit so Windows never creates an NTFS alternate data stream.
     if file.file_name() != Some(file.as_os_str())
+        || file.to_string_lossy().contains(':')
         || !file
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("ncell"))
@@ -120,15 +122,20 @@ fn resolve_script(file: PathBuf) -> Result<PathBuf> {
 }
 
 /// Honour the user's editor first; fall back to per-OS openers.
+/// Quoted paths ("C:\Program Files\...") survive via the shell-free splitter.
 /// `open -t` on macOS now passes `-W` so it waits instead of returning at once.
-/// Plain `xdg-open` cannot wait or guarantee an editor, so $EDITOR wins on Linux.
+/// Plain `xdg-open` cannot wait or guarantee an editor, so real editors are
+/// probed first on Linux and $EDITOR always wins everywhere (Windows included).
 fn editor_arguments() -> Vec<String> {
     for key in ["VISUAL", "EDITOR"] {
         if let Some(command) = std::env::var(key)
             .ok()
             .filter(|value| !value.trim().is_empty())
         {
-            return command.split_whitespace().map(str::to_owned).collect();
+            match words(&command) {
+                Ok(args) if !args.is_empty() => return args,
+                _ => return vec![command],
+            }
         }
     }
     #[cfg(target_os = "windows")]
@@ -136,7 +143,18 @@ fn editor_arguments() -> Vec<String> {
     #[cfg(target_os = "macos")]
     return vec!["open".into(), "-t".into(), "-W".into()];
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    vec!["xdg-open".into()]
+    {
+        for editor in ["nano", "vi"] {
+            if std::process::Command::new(editor)
+                .arg("--version")
+                .output()
+                .is_ok()
+            {
+                return vec![editor.into()];
+            }
+        }
+        vec!["xdg-open".into()]
+    }
 }
 fn create_file(
     file: &std::path::Path,

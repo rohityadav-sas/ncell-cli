@@ -666,12 +666,20 @@ pub(super) fn merge_fetched_packs(
                 }
                 continue;
             }
-            let name = pack["displayInfo"]["displayName"]
+            let raw = pack["displayInfo"]["displayName"]
                 .as_str()
                 .filter(|name| !name.is_empty())
                 .or_else(|| pack["ncellName"].as_str())
                 .or_else(|| pack["productName"].as_str())
                 .unwrap_or("Pack");
+            // Dropdown text comes from the server; drop control characters here
+            // so a hostile pack name cannot inject terminal escapes.
+            let name: String = raw.chars().filter(|ch| !ch.is_control()).collect();
+            let name = if name.is_empty() {
+                "Pack".to_owned()
+            } else {
+                name
+            };
             let price = pack["productOfferingPrice"]["price"].as_str().unwrap_or("");
             let price = price.strip_suffix(".00").unwrap_or(price);
             let mut item = Suggestion::new(

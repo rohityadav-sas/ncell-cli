@@ -1113,13 +1113,13 @@ fn status_date(value: &str) -> String {
     }
     chrono::NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S")
         .map(|date| date.format("%b %d %Y %I:%M:%S %p").to_string())
-        .unwrap_or_else(|_| value.to_owned())
+        .unwrap_or_else(|_| clean(value).into_owned())
 }
 
 fn balance_date(value: &str) -> String {
     chrono::NaiveDateTime::parse_from_str(value, "%b %d %Y %H:%M:%S")
         .map(|date| date.format("%b %d %Y %I:%M:%S %p").to_string())
-        .unwrap_or_else(|_| value.to_owned())
+        .unwrap_or_else(|_| clean(value).into_owned())
 }
 
 fn empty_allowance(item: &Value) -> bool {
@@ -1380,10 +1380,12 @@ fn print_task(item: &Value) {
         println!(
             "Task {}: {}",
             item["id"],
-            data["message"]
-                .as_str()
-                .or_else(|| data["error"].as_str())
-                .unwrap_or("Claim failed")
+            clean(
+                data["message"]
+                    .as_str()
+                    .or_else(|| data["error"].as_str())
+                    .unwrap_or("Claim failed")
+            )
         );
     }
 }
@@ -1395,14 +1397,21 @@ fn task_failed(response: &Value) -> bool {
 /// Server text always passes through here before it reaches the terminal,
 /// so pasted control characters or escape sequences from API responses
 /// can never inject terminal commands into one-shot output.
-fn text(value: &Value) -> std::borrow::Cow<'_, str> {
-    match value.as_str() {
-        Some(raw) if raw.chars().any(|ch| ch.is_control()) => raw
+fn clean(value: &str) -> std::borrow::Cow<'_, str> {
+    if value.chars().any(|ch| ch.is_control()) {
+        value
             .chars()
             .filter(|ch| !ch.is_control())
             .collect::<String>()
-            .into(),
-        Some(raw) => std::borrow::Cow::Borrowed(raw),
+            .into()
+    } else {
+        std::borrow::Cow::Borrowed(value)
+    }
+}
+
+fn text(value: &Value) -> std::borrow::Cow<'_, str> {
+    match value.as_str() {
+        Some(raw) => clean(raw),
         None => std::borrow::Cow::Borrowed(""),
     }
 }

@@ -192,11 +192,11 @@ pub(super) fn welcome(columns: usize) -> String {
 
 type PanicHook = Arc<dyn Fn(&std::panic::PanicHookInfo<'_>) + Send + Sync>;
 
-/// Mouse capture (for wheel scrolling) is opt-in: while captured, the
+/// Mouse capture (for wheel scrolling) is on by default: while captured, the
 /// terminal passes mouse events to the app and normal drag-selection stops.
-/// Set NCELL_MOUSE=1 to enable it; otherwise scroll with PageUp/PageDown.
+/// Set NCELL_MOUSE=0 to disable it (restores drag-selection); PageUp/PageDown always scroll.
 fn mouse_capture() -> bool {
-    matches!(std::env::var("NCELL_MOUSE").as_deref(), Ok("1"))
+    !matches!(std::env::var("NCELL_MOUSE").as_deref(), Ok("0"))
 }
 struct TerminalGuard {
     active: bool,
@@ -1359,13 +1359,15 @@ fn draw(
     output.flush()
 }
 
-fn parse_line(input: &str) -> std::result::Result<Args, ParseError> {
+/// Tokenize once and share the words: parsing validates them, dispatch
+/// reuses the same vector instead of tokenizing the line a second time.
+fn parse_line(input: &str) -> std::result::Result<(Args, Vec<String>), ParseError> {
     let mut words = script::words(input).map_err(ParseError::Message)?;
     if words.first().is_some_and(|word| word == "ncell") {
         words.remove(0);
     }
-    let args = Args::try_parse_from(std::iter::once("ncell".to_owned()).chain(words)).map_err(
-        |error| {
+    let args = Args::try_parse_from(std::iter::once("ncell".to_owned()).chain(words.clone()))
+        .map_err(|error| {
             if matches!(
                 error.kind(),
                 clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion
@@ -1382,15 +1384,14 @@ fn parse_line(input: &str) -> std::result::Result<Args, ParseError> {
                         .to_owned(),
                 )
             }
-        },
-    )?;
+        })?;
     if matches!(args.command, Command::Interactive) {
         return Err(ParseError::Message(
             "Already in interactive mode; type exit to return to your shell".into(),
         ));
     }
     super::validate_args(&args).map_err(ParseError::Message)?;
-    Ok(args)
+    Ok((args, words))
 }
 enum ParseError {
     Message(String),
@@ -1544,7 +1545,7 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
             command_colors(&editor.input)
         ));
         match parsed {
-            Ok(args) => {
+            Ok((args, words)) => {
                 let invalidate = matches!(
                     &args.command,
                     Command::Login { .. }
@@ -1560,10 +1561,6 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
                         ..
                     }
                 );
-                let mut words = script::words(&editor.input).unwrap_or_default();
-                if words.first().is_some_and(|word| word == "ncell") {
-                    words.remove(0);
-                }
                 guard.pause().map_err(fail)?;
                 if let Err(error) = run_captured(&words, &mut transcript) {
                     transcript.push_str(&format!("Error: {error}\n"));

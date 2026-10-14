@@ -76,25 +76,15 @@ fn request(
         .multipart(form)
         .send()
         .map_err(Error::from_http)?;
-    let status = response.status().as_u16();
-    let data: Value = response.json().map_err(|_| {
-        if (200..300).contains(&status) {
-            Error::InvalidResponse
-        } else {
-            Error::CheckIn {
-                message: format!("Math game website returned HTTP {status}"),
-                status,
-                response: Box::new(Value::Null),
-            }
-        }
-    })?;
+    let (status, data) = super::check_in::game_json(response, "Math game website")?;
     if !(200..300).contains(&status) || data["success"] == false || !data["error"].is_null() {
         return Err(Error::CheckIn {
-            message: data["error"]
-                .as_str()
-                .or_else(|| data["message"].as_str())
-                .unwrap_or("Math game request failed")
-                .into(),
+            message: super::check_in::clean_message(
+                data["error"]
+                    .as_str()
+                    .or_else(|| data["message"].as_str())
+                    .unwrap_or("Math game request failed"),
+            ),
             status,
             response: Box::new(data),
         });

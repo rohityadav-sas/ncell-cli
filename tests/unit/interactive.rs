@@ -373,7 +373,7 @@ fn pack_cache_expires_after_five_minutes_and_acceptance_routes_sms_catalog() {
     let parsed =
         parse_line(&editor.input).unwrap_or_else(|_| panic!("Invalid accepted subscription"));
     assert!(matches!(
-        parsed.command,
+        parsed.0.command,
         Command::Plans {
             action: Some(super::super::PlanCommand::Subscribe { category: 50, .. }),
             ..

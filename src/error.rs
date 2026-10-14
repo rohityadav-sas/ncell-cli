@@ -60,6 +60,11 @@ impl Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 fn api_error_detail(code: &str) -> &'static str {
+    // Synthetic HTTP codes (HTTP502 and friends) have no app message; without
+    // this the display would append a confusing "Meaning unavailable" suffix.
+    if code.starts_with("HTTP") {
+        return "";
+    }
     include!("response_codes.rs")
 }
 

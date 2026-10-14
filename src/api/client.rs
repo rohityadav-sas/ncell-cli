@@ -70,7 +70,7 @@ impl Client {
         let (status, value) = self.post_raw(path, body, token)?;
         let header = &value["responseHeader"];
         let code = &header["responseCode"];
-        if code != "200" && code != 200 {
+        if !(200..300).contains(&status) || (code != "200" && code != 200) {
             return Err(api_error(status, value));
         }
         Ok(value)
