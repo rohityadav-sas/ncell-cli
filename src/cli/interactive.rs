@@ -203,7 +203,7 @@ type PanicHook = Arc<dyn Fn(&std::panic::PanicHookInfo<'_>) + Send + Sync>;
 /// terminal passes mouse events to the app and normal drag-selection stops.
 /// Set NCELL_MOUSE=1 to enable it; otherwise scroll with PageUp/PageDown.
 fn mouse_capture() -> bool {
-    std::env::var_os("NCELL_MOUSE").is_some()
+    !matches!(std::env::var("NCELL_MOUSE").as_deref(), Ok("0"))
 }
 struct TerminalGuard {
     active: bool,
