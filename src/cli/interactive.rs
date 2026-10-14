@@ -1242,12 +1242,7 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
             continue;
         }
         if action == Action::Exit {
-            queue!(
-                io::stdout(),
-                MoveToColumn(0),
-                Clear(ClearType::FromCursorDown)
-            )
-            .map_err(fail)?;
+            clear_viewport().map_err(fail)?;
             guard.pause().map_err(fail)?;
             return Ok(());
         }
