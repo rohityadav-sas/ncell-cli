@@ -4,9 +4,18 @@ fn uses_system_editor_and_preserves_created_file_on_launch_failure() {
     #[cfg(target_os = "windows")]
     assert_eq!(editor_arguments(), ["notepad.exe"]);
     #[cfg(target_os = "macos")]
-    assert_eq!(editor_arguments(), ["open", "-t"]);
+    assert_eq!(editor_arguments(), ["open", "-t", "-W"]);
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    assert_eq!(editor_arguments(), ["xdg-open"]);
+    {
+        // Which binary exists depends on the machine (CI images ship nano
+        // and vi), so only the probe order is asserted, not one fixed editor.
+        let actual = editor_arguments();
+        assert_eq!(actual.len(), 1);
+        assert!(
+            ["nano", "vi", "xdg-open"].contains(&actual[0].as_str()),
+            "unexpected editor: {actual:?}"
+        );
+    }
     let file = std::env::temp_dir().join(format!("ncell-{}.ncell", uuid::Uuid::new_v4()));
     let mut opened = false;
     assert!(
