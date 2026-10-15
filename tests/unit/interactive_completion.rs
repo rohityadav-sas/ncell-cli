@@ -33,7 +33,7 @@ fn root_is_hidden_until_typing_or_explicit_shortcut_and_schema_stays_authoritati
     assert!(values(&all).contains(&"exit"));
     assert!(!values(&all).contains(&"interactive"));
     for child in Completer::new().root.get_subcommands() {
-        if !matches!(child.get_name(), "help" | "interactive") {
+        if child.get_name() != "help" {
             assert!(
                 values(&all).contains(&child.get_name()),
                 "{}",

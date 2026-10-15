@@ -184,6 +184,7 @@ fn parsing_uses_real_clap_and_shell_free_script_tokenizer() {
         "status | more",
         "status $(whoami)",
         "interactive",
+        "ncell",
         "game claim-task 1 all",
     ] {
         assert!(
@@ -380,9 +381,9 @@ fn pack_cache_expires_after_five_minutes_and_acceptance_routes_sms_catalog() {
         parse_line(&editor.input).unwrap_or_else(|_| panic!("Invalid accepted subscription"));
     assert!(matches!(
         parsed.0.command,
-        Command::Plans {
+        Some(Command::Plans {
             action: Some(super::super::PlanCommand::Subscribe { category: 50, .. }),
             ..
-        }
+        })
     ));
 }

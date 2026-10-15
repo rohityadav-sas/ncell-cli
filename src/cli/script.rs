@@ -258,12 +258,15 @@ fn parse(source: &str) -> Result<Vec<Step>> {
         if words.first().is_some_and(|w| w == "ncell") {
             words.remove(0);
         }
+        if words.is_empty() {
+            return Err(error(
+                "Type a command; run ncell on its own for interactive mode".into(),
+            ));
+        }
         let args = Args::try_parse_from(std::iter::once("ncell".to_owned()).chain(words.clone()))
             .map_err(|e| error(e.to_string()))?;
-        if matches!(args.command, Command::Script { .. } | Command::Interactive) {
-            return Err(error(
-                "Nested script or interactive commands are not supported".into(),
-            ));
+        if matches!(&args.command, Some(Command::Script { .. })) {
+            return Err(error("Nested script commands are not supported".into()));
         }
         validate_args(&args).map_err(error)?;
         steps.push(Step {

@@ -31,14 +31,13 @@ pub struct Args {
     /// Print structured JSON output
     #[arg(long, global = true)]
     pub json: bool,
+    /// Omit the subcommand to open the interactive shell.
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Subcommand, Clone)]
 enum Command {
-    /// Open an interactive command editor with live suggestions.
-    Interactive,
     /// Manage reusable scripts
     Script {
         #[command(subcommand)]
@@ -215,9 +214,9 @@ fn parse_task_id(value: &str) -> std::result::Result<TaskId, String> {
     }
 }
 fn validate_args(args: &Args) -> std::result::Result<(), String> {
-    if let Command::Game {
+    if let Some(Command::Game {
         action: GameCommand::ClaimTask { ids },
-    } = &args.command
+    }) = &args.command
         && ids.contains(&TaskId::All)
         && ids.len() != 1
     {
@@ -350,19 +349,23 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
     validate_args(&args).map_err(Error::Script)?;
     if matches!(
         &args.command,
-        Command::Login { .. }
-            | Command::Logout
-            | Command::Refresh
-            | Command::Account {
-                action: AccountCommand::Add { .. }
-                    | AccountCommand::Remove { .. }
-                    | AccountCommand::Switch { .. }
-            }
+        Some(
+            Command::Login { .. }
+                | Command::Logout
+                | Command::Refresh
+                | Command::Account {
+                    action: AccountCommand::Add { .. }
+                        | AccountCommand::Remove { .. }
+                        | AccountCommand::Switch { .. },
+                }
+        )
     ) {
         runtime.game = None;
     }
-    match args.command {
-        Command::Interactive => return interactive::run(runtime, args.json),
+    let Some(command) = args.command else {
+        return interactive::run(runtime, args.json);
+    };
+    match command {
         Command::Script { action } => return script::run(action, args.json, runtime),
         Command::Game { action } => {
             let game = runtime.game()?;

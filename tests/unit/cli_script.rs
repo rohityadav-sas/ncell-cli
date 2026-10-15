@@ -29,7 +29,7 @@ fn parses_every_command_family_and_literal_quoted_arguments() {
     let steps = parse(source).unwrap();
     assert_eq!(steps.len(), 15);
     assert!(
-        matches!(&steps[10].args.command, Command::Sms { action: super::super::SmsCommand::SendFree { text, .. } } if text == "hello $HOME | literal")
+        matches!(&steps[10].args.command, Some(Command::Sms { action: super::super::SmsCommand::SendFree { text, .. } }) if text == "hello $HOME | literal")
     );
     assert_eq!(
         words("sms send-free 9812345678 'C:\\my files\\hi'").unwrap()[3],
@@ -96,15 +96,15 @@ fn runner_orders_mocked_sms_and_purchase_and_stops_on_rejection() {
         calls += 1;
         let args = step.args.clone();
         match args.command {
-            Command::Sms {
+            Some(Command::Sms {
                 action: super::super::SmsCommand::SendFree { number, text },
-            } => {
+            }) => {
                 client.send_free_sms("9812345678", "test-token", &number, &text)?;
             }
-            Command::Plans {
+            Some(Command::Plans {
                 action: Some(super::super::PlanCommand::Subscribe { .. }),
                 ..
-            } => {
+            }) => {
                 let plan = json!({"techInfo":{"subscriptionCode":"123"},"ncellName":"Test pack","productOfferingPrice":{"price":"1.00"}});
                 client.subscribe("9812345678", "test-token", "test-device", &plan)?;
             }

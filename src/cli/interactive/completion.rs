@@ -306,7 +306,7 @@ impl Completer {
                         .get_subcommands()
                         .filter(|child| {
                             !child.is_hide_set()
-                                && !matches!(child.get_name(), "help" | "interactive")
+                                && child.get_name() != "help"
                                 && child.get_name().starts_with(prefix)
                         })
                         .map(|child| {

@@ -108,7 +108,7 @@ fn completed_tasks_are_normal_results_but_other_failures_are_errors() {
 fn game_arguments_require_one_action_and_task_ids() {
     let args = Args::try_parse_from(["ncell", "game", "claim-task", "1,2,3"]).unwrap();
     assert!(
-        matches!(args.command, Command::Game { action: GameCommand::ClaimTask { ids } } if ids == [TaskId::Id(1), TaskId::Id(2), TaskId::Id(3)])
+        matches!(args.command, Some(Command::Game { action: GameCommand::ClaimTask { ids } }) if ids == [TaskId::Id(1), TaskId::Id(2), TaskId::Id(3)])
     );
     assert!(Args::try_parse_from(["ncell", "game", "check-in"]).is_ok());
     for flags in [
@@ -130,6 +130,11 @@ fn game_arguments_require_one_action_and_task_ids() {
     ] {
         assert!(Args::try_parse_from(args).is_err());
     }
+}
+
+#[test]
+fn bare_command_opens_interactive_shell() {
+    assert!(Args::try_parse_from(["ncell"]).unwrap().command.is_none());
 }
 
 #[test]
@@ -313,7 +318,7 @@ fn json_is_available_on_every_command() {
 fn sort_arguments_accept_multiple_keys_and_reject_invalid_values() {
     let args =
         Args::try_parse_from(["ncell", "plans", "--sort", "validity:desc,price:asc"]).unwrap();
-    let Command::Plans { options, .. } = args.command else {
+    let Some(Command::Plans { options, .. }) = args.command else {
         panic!("expected plans")
     };
     assert!(matches!(

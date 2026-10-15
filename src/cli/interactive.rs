@@ -1411,6 +1411,13 @@ fn parse_line(input: &str) -> std::result::Result<(Args, Vec<String>), ParseErro
     if words.first().is_some_and(|word| word == "ncell") {
         words.remove(0);
     }
+    // There is no interactive subcommand anymore: bare `ncell` opens the
+    // shell, so both spellings are answered here instead of spawning a child.
+    if words.is_empty() || words.first().is_some_and(|word| word == "interactive") {
+        return Err(ParseError::Message(
+            "Already in interactive mode; type exit to return to your shell".into(),
+        ));
+    }
     let args = Args::try_parse_from(std::iter::once("ncell".to_owned()).chain(words.clone()))
         .map_err(|error| {
             if matches!(
@@ -1430,11 +1437,6 @@ fn parse_line(input: &str) -> std::result::Result<(Args, Vec<String>), ParseErro
                 )
             }
         })?;
-    if matches!(args.command, Command::Interactive) {
-        return Err(ParseError::Message(
-            "Already in interactive mode; type exit to return to your shell".into(),
-        ));
-    }
     super::validate_args(&args).map_err(ParseError::Message)?;
     Ok((args, words))
 }
@@ -1593,34 +1595,36 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
             Ok((args, words)) => {
                 let invalidate = matches!(
                     &args.command,
-                    Command::Login { .. }
-                        | Command::Account { .. }
-                        | Command::Logout
-                        | Command::Refresh
-                        | Command::Script { .. }
+                    Some(
+                        Command::Login { .. }
+                            | Command::Account { .. }
+                            | Command::Logout
+                            | Command::Refresh
+                            | Command::Script { .. }
+                    )
                 );
                 let is_subscribe = matches!(
                     &args.command,
-                    Command::Plans {
+                    Some(Command::Plans {
                         action: Some(super::PlanCommand::Subscribe { .. }),
                         ..
-                    }
+                    })
                 );
                 guard.pause().map_err(fail)?;
                 // `plans subscribe` only needs the one plan the user just picked
                 // from the pack dropdown, so hand it over instead of re-fetching.
                 let plan_hint = match &args.command {
-                    Command::Plans {
+                    Some(Command::Plans {
                         action: Some(super::PlanCommand::Subscribe { id, category, .. }),
                         ..
-                    } => packs.plan_hint(id, *category),
+                    }) => packs.plan_hint(id, *category),
                     _ => None,
                 };
                 // A cancelled or failed command changes nothing, so keep the
                 // caches: without this every cancelled subscribe refetches all
                 // 18 pack categories on the next Ctrl+Space. Scripts always
                 // invalidate since a half-finished script may have subscribed.
-                let scripted = matches!(&args.command, Command::Script { .. });
+                let scripted = matches!(&args.command, Some(Command::Script { .. }));
                 let succeeded = match run_captured(&words, plan_hint.as_deref(), &mut transcript) {
                     Err(error) => {
                         transcript.push_str(&format!("Error: {error}\n"));
