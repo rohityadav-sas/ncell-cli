@@ -245,7 +245,7 @@ fn strip_ansi(input: &str) -> String {
 #[test]
 fn production_banner_has_single_line_shortcuts_and_no_preview_status() {
     let banner = strip_ansi(&welcome(80));
-    assert!(banner.contains("interactive · live commands"));
+    assert!(!banner.contains("interactive · live commands"));
     assert!(
         banner
             .lines()

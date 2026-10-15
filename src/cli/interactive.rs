@@ -161,9 +161,6 @@ pub(super) fn welcome(columns: usize) -> String {
         rows.push(frame(paint(LAVENDER, "NCELL"), 5));
     }
     rows.push(frame(String::new(), 0));
-    let subtitle = clipped("interactive · live commands", inner);
-    rows.push(frame(paint(TEAL, &subtitle), width(&subtitle)));
-    rows.push(frame(String::new(), 0));
     rows.push(format!(
         "{indent}{}",
         paint(BORDER, &format!("╰{}╯", "─".repeat(inner)))
