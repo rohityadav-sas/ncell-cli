@@ -11,6 +11,9 @@ pub struct Client {
     pub(super) categories_cache: std::sync::Arc<
         std::sync::Mutex<std::collections::HashMap<String, (std::time::Instant, Value)>>,
     >,
+    pub(super) plans_cache: std::sync::Arc<
+        std::sync::Mutex<std::collections::HashMap<String, (std::time::Instant, Value)>>,
+    >,
 }
 
 impl Client {
@@ -30,6 +33,7 @@ impl Client {
             http,
             base_url: base_url.trim_end_matches('/').into(),
             categories_cache: Default::default(),
+            plans_cache: Default::default(),
         })
     }
 

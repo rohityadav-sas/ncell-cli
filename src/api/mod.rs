@@ -26,6 +26,11 @@ pub const GAME_TOKEN_COST: u64 = 25;
 /// How long category and game-session caches are trusted.
 pub const CATEGORY_TTL_SECS: u64 = 600;
 
+/// How long plan-list responses are trusted. Shorter than categories because
+/// packs sell out; long enough that a Ctrl+Space prefetch still covers the
+/// subscribe that follows it.
+pub const PLANS_TTL_SECS: u64 = 300;
+
 const GAME_BASE_URL: &str = "https://sajeeb.com.np/ncellapp/checkin";
 
 fn game_endpoint(path: &str) -> String {

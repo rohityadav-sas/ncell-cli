@@ -1,4 +1,6 @@
-use super::{APP_VERSION, CATEGORY_TTL_SECS, Client, GAME_CLIENT_ID, models::request_header};
+use super::{
+    APP_VERSION, CATEGORY_TTL_SECS, Client, GAME_CLIENT_ID, PLANS_TTL_SECS, models::request_header,
+};
 use crate::error::{Error, Result};
 use serde_json::{Value, json};
 
@@ -93,6 +95,12 @@ impl Client {
                     .as_str()
                     .is_some_and(|s| s.eq_ignore_ascii_case("success")));
         if subscribed {
+            // The bought pack may vanish from the list; drop cached plan pages
+            // so the next lookup refetches instead of showing a stale entry.
+            if let Ok(mut cache) = self.plans_cache.lock() {
+                let prefix = format!("{msisdn}:");
+                cache.retain(|key, _| !key.starts_with(&prefix));
+            }
             Ok(response)
         } else {
             Err(super::client::api_error(status, response))
@@ -143,6 +151,16 @@ impl Client {
         category: u64,
         keyword: &str,
     ) -> Result<Value> {
+        // The Ctrl+Space prefetch and the subscribe lookup ask for the same
+        // page (same category, empty keyword). Serve repeats from memory so a
+        // second `plans subscribe 1225` does not refetch over the network.
+        let key = format!("{msisdn}:{category}:{keyword}");
+        if let Ok(cache) = self.plans_cache.lock()
+            && let Some((created, entry)) = cache.get(&key)
+            && created.elapsed() < std::time::Duration::from_secs(PLANS_TTL_SECS)
+        {
+            return Ok(entry.clone());
+        }
         let catalog = if category == super::DEFAULT_PLAN_CATEGORY {
             "data"
         } else {
@@ -182,6 +200,9 @@ impl Client {
         )?;
         if !response["availablePackages"].is_array() {
             return Err(Error::InvalidResponse);
+        }
+        if let Ok(mut cache) = self.plans_cache.lock() {
+            cache.insert(key, (std::time::Instant::now(), response.clone()));
         }
         Ok(response)
     }
