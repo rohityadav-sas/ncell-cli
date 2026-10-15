@@ -637,11 +637,13 @@ fn draw_output(transcript: &Transcript) -> io::Result<()> {
 }
 
 /// Run one command as a child process and stream its output into the transcript.
+/// Returns whether the child exited successfully, so the caller only discards
+/// cached data when state may actually have changed.
 fn run_captured(
     words: &[String],
     plan_hint: Option<&str>,
     transcript: &mut Transcript,
-) -> io::Result<()> {
+) -> io::Result<bool> {
     let mut command = std::process::Command::new(std::env::current_exe()?);
     command
         .args(words)
@@ -677,8 +679,7 @@ fn run_captured(
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
     }
-    child.wait()?;
-    Ok(())
+    child.wait().map(|status| status.success())
 }
 fn suggestion_shortcut(key: KeyEvent) -> bool {
     matches!(key.code, KeyCode::Null | KeyCode::Char('\0'))
@@ -1598,7 +1599,7 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
                         | Command::Refresh
                         | Command::Script { .. }
                 );
-                let subscribed = matches!(
+                let is_subscribe = matches!(
                     &args.command,
                     Command::Plans {
                         action: Some(super::PlanCommand::Subscribe { .. }),
@@ -1615,13 +1616,22 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
                     } => packs.plan_hint(id, *category),
                     _ => None,
                 };
-                if let Err(error) = run_captured(&words, plan_hint.as_deref(), &mut transcript) {
-                    transcript.push_str(&format!("Error: {error}\n"));
-                }
-                if invalidate {
+                // A cancelled or failed command changes nothing, so keep the
+                // caches: without this every cancelled subscribe refetches all
+                // 18 pack categories on the next Ctrl+Space. Scripts always
+                // invalidate since a half-finished script may have subscribed.
+                let scripted = matches!(&args.command, Command::Script { .. });
+                let succeeded = match run_captured(&words, plan_hint.as_deref(), &mut transcript) {
+                    Err(error) => {
+                        transcript.push_str(&format!("Error: {error}\n"));
+                        false
+                    }
+                    Ok(succeeded) => succeeded,
+                };
+                if invalidate && (scripted || succeeded) {
                     categories.invalidate();
                     packs.invalidate();
-                } else if subscribed {
+                } else if is_subscribe && succeeded {
                     packs.invalidate();
                 }
             }
