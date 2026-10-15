@@ -698,6 +698,26 @@ pub(super) fn merge_fetched_packs(
     Ok(packs.into_values().collect())
 }
 
+/// Full plan objects keyed by (category, id), kept so `plans subscribe` can be
+/// handed the selected plan instead of fetching the catalog again. The same id
+/// can appear under several categories, so nothing is deduplicated here.
+pub(super) fn plan_index(
+    fetched: &[(u64, serde_json::Value)],
+) -> std::collections::HashMap<(u64, String), serde_json::Value> {
+    let mut plans = std::collections::HashMap::new();
+    for (category, result) in fetched {
+        for pack in result["availablePackages"].as_array().into_iter().flatten() {
+            let id = pack["id"]
+                .as_u64()
+                .or_else(|| pack["id"].as_str().and_then(|id| id.parse().ok()));
+            if let Some(id) = id {
+                plans.insert((*category, id.to_string()), pack.clone());
+            }
+        }
+    }
+    plans
+}
+
 pub(super) fn pack_suggestions(
     packs: &[Suggestion],
     query: &str,
@@ -733,4 +753,29 @@ pub(super) fn pack_suggestions(
             item
         })
         .collect()
+}
+
+#[cfg(test)]
+mod plan_index_tests {
+    use super::plan_index;
+    use serde_json::json;
+
+    #[test]
+    fn keeps_one_plan_per_category_and_normalizes_ids() {
+        let fetched = vec![
+            (
+                66,
+                json!({"availablePackages": [{"id": 7, "n": "a"}, {"id": "8", "n": "b"}]}),
+            ),
+            (
+                70,
+                json!({"availablePackages": [{"id": 7, "n": "c"}, {"id": "bad"}]}),
+            ),
+        ];
+        let plans = plan_index(&fetched);
+        assert_eq!(plans.len(), 3);
+        assert_eq!(plans[&(66, "7".to_owned())]["n"], "a");
+        assert_eq!(plans[&(70, "7".to_owned())]["n"], "c");
+        assert_eq!(plans[&(66, "8".to_owned())]["n"], "b");
+    }
 }

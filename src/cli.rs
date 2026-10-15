@@ -624,27 +624,30 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
             ..
         } => {
             // Look up the plan first so the prompt can show its real name and price.
-            let (plan, name, price) = authenticated(runtime.client()?, |client, account, _| {
-                let catalog =
-                    client.search_plans(&account.msisdn, &account.access_token, category, "")?;
-                let plan = catalog["availablePackages"]
-                    .as_array()
-                    .ok_or(Error::InvalidResponse)?
-                    .iter()
-                    .find(|p| {
-                        p["id"].as_str().is_some_and(|found| found == id)
-                            || p["id"]
-                                .as_u64()
-                                .is_some_and(|found| found.to_string() == id)
-                    })
-                    .cloned()
-                    .ok_or(Error::InvalidInput(
-                        "Plan not found in this category. Run plans --category <ID>",
-                    ))?;
-                let name = text(&plan["displayInfo"]["displayName"]).trim().to_owned();
-                let price = plan_price(&plan);
-                Ok((plan, name, price))
-            })?;
+            // The interactive shell already holds the plan the user picked and
+            // passes it along; anything missing or mismatched falls back to a lookup.
+            let plan = match hinted_plan(&id) {
+                Some(plan) => plan,
+                None => authenticated(runtime.client()?, |client, account, _| {
+                    let catalog = client.search_plans(
+                        &account.msisdn,
+                        &account.access_token,
+                        category,
+                        "",
+                    )?;
+                    catalog["availablePackages"]
+                        .as_array()
+                        .ok_or(Error::InvalidResponse)?
+                        .iter()
+                        .find(|p| plan_id_matches(&p["id"], &id))
+                        .cloned()
+                        .ok_or(Error::InvalidInput(
+                            "Plan not found in this category. Run plans --category <ID>",
+                        ))
+                })?,
+            };
+            let name = text(&plan["displayInfo"]["displayName"]).trim().to_owned();
+            let price = plan_price(&plan);
             if dry_run {
                 output(
                     args.json,
@@ -986,6 +989,29 @@ fn open_docs(file: &std::path::Path) -> Result<()> {
         .spawn();
     command.map_err(|_| Error::Script("Could not open the documentation in a browser".into()))?;
     Ok(())
+}
+
+/// Plan IDs arrive as strings or numbers; accept both.
+fn plan_id_matches(value: &Value, id: &str) -> bool {
+    value.as_str().is_some_and(|found| found == id)
+        || value.as_u64().is_some_and(|found| found.to_string() == id)
+}
+
+/// Accept a plan handed over by the interactive shell only if it was fetched
+/// for the same account and is the plan being subscribed to.
+fn plan_from_hint(raw: &str, msisdn: &str, id: &str) -> Option<Value> {
+    let hint: Value = serde_json::from_str(raw).ok()?;
+    (hint["msisdn"] == msisdn && plan_id_matches(&hint["plan"]["id"], id))
+        .then(|| hint["plan"].clone())
+}
+
+/// Read NCELL_PLAN_HINT and check it against the saved session on disk (no
+/// network). The store is dropped before returning so the later authenticated
+/// request can take the session lock.
+fn hinted_plan(id: &str) -> Option<Value> {
+    let raw = std::env::var("NCELL_PLAN_HINT").ok()?;
+    let account = FileStore::new().ok()?.load().ok()??.account?;
+    plan_from_hint(&raw, &account.msisdn, id)
 }
 
 /// Human price for a plan pack, shared by the list and the buy prompt.
@@ -1545,3 +1571,36 @@ fn sort_key(plan: &Value, sort: Sort) -> f64 {
 #[cfg(test)]
 #[path = "../tests/unit/cli.rs"]
 mod tests;
+
+#[cfg(test)]
+mod plan_hint_tests {
+    use super::{plan_from_hint, plan_id_matches};
+    use serde_json::json;
+
+    fn hint(id: serde_json::Value) -> String {
+        json!({"msisdn": "9812345678", "plan": {"id": id, "ncellName": "Pack"}}).to_string()
+    }
+
+    #[test]
+    fn accepts_matching_account_and_id() {
+        let plan = plan_from_hint(&hint(json!("42")), "9812345678", "42").unwrap();
+        assert_eq!(plan["ncellName"], "Pack");
+        assert!(plan_from_hint(&hint(json!(42)), "9812345678", "42").is_some());
+    }
+
+    #[test]
+    fn rejects_other_account_other_id_and_garbage() {
+        assert!(plan_from_hint(&hint(json!("42")), "9800000000", "42").is_none());
+        assert!(plan_from_hint(&hint(json!("42")), "9812345678", "43").is_none());
+        assert!(plan_from_hint("not json", "9812345678", "42").is_none());
+        assert!(plan_from_hint("{}", "9812345678", "42").is_none());
+    }
+
+    #[test]
+    fn id_matching_handles_strings_numbers_and_junk() {
+        assert!(plan_id_matches(&json!("7"), "7"));
+        assert!(plan_id_matches(&json!(7), "7"));
+        assert!(!plan_id_matches(&json!(null), "7"));
+        assert!(!plan_id_matches(&json!(7), "07"));
+    }
+}

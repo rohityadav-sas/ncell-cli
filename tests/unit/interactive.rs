@@ -267,7 +267,13 @@ fn cache_invalidation_discards_values_failures_and_inflight_receiver() {
         pending: Some(receiver),
         ..CategoryCache::default()
     };
-    sender.send(CacheEvent::Finished(Ok(vec![]))).unwrap();
+    sender
+        .send(CacheEvent::Finished(Ok(Loaded {
+            values: vec![],
+            plans: HashMap::new(),
+            msisdn: String::new(),
+        })))
+        .unwrap();
     cache.poll();
     assert!(cache.loaded.is_some());
     cache.invalidate();
