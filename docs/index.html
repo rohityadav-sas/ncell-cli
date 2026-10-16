@@ -512,7 +512,9 @@
             <a href="#installation"><svg class="ico" aria-hidden="true">
                     <use href="#i-download" />
                 </svg><span>Installation</span></a>
-            <a href="#interactive"><svg class="ico" aria-hidden="true"><use href="#i-terminal" /></svg><span>Interactive mode</span></a>
+            <a href="#interactive"><svg class="ico" aria-hidden="true">
+                    <use href="#i-terminal" />
+                </svg><span>Interactive mode</span></a>
             <p class="nav-title">Accounts</p>
             <a href="#login"><svg class="ico" aria-hidden="true">
                     <use href="#i-log-in" />
@@ -692,28 +694,42 @@ scoop install ncell-cli</code></pre>
 brew install ncell-cli</code></pre>
 
             <h2 id="interactive">Interactive mode</h2>
-            <p>Open an interactive command prompt with live dropdown suggestions. No shell profile setup is needed.</p>
+            <p>Open an interactive command prompt with autocomplete.</p>
             <pre data-lang="Shell"><code>ncell</code></pre>
-            <p>Type <code>ga</code> to suggest <code>game</code>, then <code>sp</code> to suggest <code>spin</code>. Suggestions stay hidden at an empty prompt until you press <kbd>Ctrl+Space</kbd>.</p>
             <table>
-                <thead><tr><th>Key</th><th>Action</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>Key</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
                 <tbody>
-                    <tr><td>Ctrl+Space</td><td>Show suggestions for the current word or next argument</td></tr>
-                    <tr><td>Up / Down</td><td>Select a suggestion, or browse command history when the dropdown is closed</td></tr>
-                    <tr><td>Tab / Enter</td><td>Accept the selected suggestion; Enter runs a complete command</td></tr>
-                    <tr><td>clear</td><td>Clear the screen and show the banner again</td></tr>
-                    <tr><td>Esc</td><td>Dismiss suggestions while keeping the command and argument hints</td></tr>
-                    <tr><td>Ctrl+A</td><td>Select the whole command; typing replaces it</td></tr>
-                    <tr><td>Ctrl+Backspace</td><td>Delete the previous word</td></tr>
-                    <tr><td>Ctrl+C / exit</td><td>Close interactive mode</td></tr>
+                    <tr>
+                        <td><kbd>Ctrl+Space</kbd></td>
+                        <td>Show suggestions</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>Up</kbd> / <kbd>Down</kbd></td>
+                        <td>Select a suggestion, or browse command history</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>Tab</kbd> / <kbd>Enter</kbd></td>
+                        <td>Accept the selected suggestion</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>Esc</kbd></td>
+                        <td>Dismiss suggestions</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>Ctrl+C</kbd> / <kbd>exit</kbd></td>
+                        <td>Close interactive mode</td>
+                    </tr>
                 </tbody>
             </table>
-            <p>Use the same commands as the normal CLI, without the <code>ncell</code> prefix. Required argument hints, plan sort directions and comma-separated fields are shown as you type. Category values come from the active account's catalog. Saved <code>.ncell</code> files are suggested for script commands.</p>
-            <p>Commands run against your saved account. Sending an SMS, subscribing to a plan and playing games have the same effects as their normal CLI commands. This is a live command prompt. It requires an interactive terminal; use ordinary commands and <code>--json</code> for automation.</p>
 
             <h2 id="login">Authentication</h2>
 
-            <p>Sign in with an OTP. The code is visible as you type:</p>
+            <p>Sign in with an OTP:</p>
 
             <pre data-lang="Shell"><code>ncell login 98XXXXXXXX</code></pre>
 
@@ -903,7 +919,8 @@ brew install ncell-cli</code></pre>
             <p>Use the plan ID and its category. Paid packs charge your Ncell account, so the
                 command shows the name and price and asks for confirmation. Use
                 <code>--yes</code> for scripts (required when input is piped) and
-                <code>--dry-run</code> to preview without spending.</p>
+                <code>--dry-run</code> to preview without spending.
+            </p>
             <pre data-lang="Shell"><code>ncell plans subscribe 984 --category 50</code></pre>
 
             <p>The plan ID is a required positional argument. Use a category ID from the category list;
@@ -1528,23 +1545,23 @@ ncell game ranks
 
         </article>
 
-            <footer class="page-footer">
+        <footer class="page-footer">
 
-                <p>
+            <p>
 
-                    ncell-cli <span data-package-version>v0.5.0</span> <span class="footer-dot">·</span> MIT
+                ncell-cli <span data-package-version>v0.5.0</span> <span class="footer-dot">·</span> MIT
 
-                    licensed
+                licensed
 
-                </p>
+            </p>
 
-                <a href="https://github.com/rohityadav-sas/ncell-cli"><svg class="ico ico-fill" aria-hidden="true">
+            <a href="https://github.com/rohityadav-sas/ncell-cli"><svg class="ico ico-fill" aria-hidden="true">
 
-                        <use href="#i-github" />
+                    <use href="#i-github" />
 
-                    </svg><span>View source on GitHub</span></a>
+                </svg><span>View source on GitHub</span></a>
 
-            </footer>
+        </footer>
 
     </main>
 

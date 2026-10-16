@@ -408,7 +408,9 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                             wait_between_games(delay, !args.json)?;
                         }
                         let repeated = all || count > 1;
-                        if repeated {
+                        // Spin and scratch print one claim-style line per game,
+                        // so only the math table keeps progress and column headers.
+                        if math && repeated {
                             if args.json {
                                 script::emit_json(json!({"event":"game_start", "game":index + 1,
                                     "total":total}));
@@ -421,13 +423,6 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                                 anstream::println!("{progress}{label}{progress:#}\n");
                                 io::stdout().flush().map_err(|_| Error::InvalidResponse)?;
                             }
-                        }
-                        if !math && !args.json {
-                            println!(
-                                "{:<12}  {:<20}  {:>8}  {:>12}",
-                                "Game", "Reward", "Tokens", "Points"
-                            );
-                            println!("{}", "-".repeat(58));
                         }
                         if math {
                             if !args.json {
@@ -512,11 +507,11 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                         balance = response[tokens].as_u64();
                         game.tokens = balance;
                         let message = format!(
-                            "{:<12}  {:<20}  {:>8}  {:>12}",
-                            format!("{label} {}", index + 1),
-                            text(&response["description"]),
-                            formatted_number(&response[tokens]),
-                            formatted_number(&response["new_week_points"])
+                            "{label} {} completed. Reward awarded: {}. Game tokens: {}. Weekly points: {}.",
+                            index + 1,
+                            text(&response["value"]),
+                            response[tokens],
+                            response["new_week_points"]
                         );
                         output(args.json, response, message);
                         io::stdout().flush().map_err(|_| Error::InvalidResponse)?;
