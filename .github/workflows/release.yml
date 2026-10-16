@@ -78,17 +78,18 @@ jobs:
           fi
   rehash:
     # Point the package managers at the release this run just published.
-    # Manual rebuild dispatches (source-ref, or full != true) are excluded:
-    # their binaries do not necessarily match the tag, so a human owns the
-    # manifests there.
+    # TAG resolves the same way as the build jobs: the release event's tag,
+    # or the dispatched tag. Manual rebuilds without full=true (or with a
+    # source-ref override) are excluded: their binaries do not necessarily
+    # match the tag, so a human owns the manifests there.
     needs: [build]
-    if: github.event_name == 'release' || inputs.full == 'true'
+    if: github.event_name == 'release' || (inputs.full == 'true' && inputs.source-ref == '')
     permissions:
       contents: write
       actions: write
     runs-on: ubuntu-latest
     env:
-      TAG: ${{ github.ref_name }}
+      TAG: ${{ inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
@@ -136,14 +137,15 @@ jobs:
     # before the real upload, so re-running is always safe.
     # Manual rebuild dispatches are excluded like in rehash.
     needs: [build]
-    if: github.event_name == 'release' || inputs.full == 'true'
+    if: github.event_name == 'release' || (inputs.full == 'true' && inputs.source-ref == '')
     runs-on: ubuntu-latest
     env:
+      TAG: ${{ inputs.tag || github.ref_name }}
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ inputs.tag || github.ref_name }}
       - uses: dtolnay/rust-toolchain@stable
       - name: Require the publish token
         run: |
@@ -154,7 +156,7 @@ jobs:
       - name: Skip versions already on crates.io
         id: check
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${TAG#v}"
           if curl -fsSL --max-time 30 "https://crates.io/api/v1/crates/ncell-cli/${version}/download" -o /dev/null; then
             echo "published=true" >> "$GITHUB_OUTPUT"
           else
