@@ -157,4 +157,6 @@ jobs:
           fi
       - name: Publish to crates.io
         if: steps.check.outputs.published != 'true'
-        run: cargo publish --locked --dry-run && cargo publish --locked
+        # The dry run already compiled and verified the package, so the real
+        # upload skips a second identical verification build.
+        run: cargo publish --locked --dry-run && cargo publish --locked --no-verify

@@ -1,8 +1,33 @@
 name: Rust
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_TERM_COLOR: always
 jobs:
+  lint:
+    # Encoding, docs and formatting never depend on the OS: check once.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/check-encoding.py
+      - run: python scripts/build-docs.py
+      - run: cargo fmt --check
   test:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
@@ -10,12 +35,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: python scripts/check-encoding.py
-      - run: python scripts/build-docs.py
-      - run: cargo fmt --check
+          components: clippy
+      # Clippy stays per-OS on purpose: open_docs, session_dir and the
+      # script editor all have target_os branches that Ubuntu alone never
+      # lints. The shared cache makes the extra legs cheap.
+      - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked
