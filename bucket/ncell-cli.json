@@ -1,12 +1,12 @@
 {
-  "version": "0.5.0",
+  "version": "0.5.1",
   "homepage": "https://rohityadav-sas.github.io/ncell-cli/",
   "bin": "ncell.exe",
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/rohityadav-sas/ncell-cli/releases/download/v0.5.0/ncell-cli-v0.5.0-windows-x86_64.zip",
-      "hash": "dd695b349bb0a8b9f6d9ead6ff194d896e6191e8ad48fde1f542b839132c7a81"
+      "url": "https://github.com/rohityadav-sas/ncell-cli/releases/download/v0.5.1/ncell-cli-v0.5.1-windows-x86_64.zip",
+      "hash": "b92fc696f77b5df60a9d470d55fabedb62b9477ac8dfabf74129fed72b98e6cf"
     }
   },
   "description": "Ncell Nepal CLI for OTP login, balances, plans and free SMS."
