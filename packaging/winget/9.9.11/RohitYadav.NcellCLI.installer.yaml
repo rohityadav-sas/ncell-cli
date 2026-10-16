@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+PackageIdentifier: RohitYadav.NcellCLI
+PackageVersion: 9.9.11
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+- RelativeFilePath: ncell.exe
+  PortableCommandAlias: ncell
+Commands:
+- ncell
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/rohityadav-sas/ncell-cli/releases/download/v9.9.11/ncell-cli-v9.9.11-windows-x86_64.zip
+  InstallerSha256: 41EB4AF814F0C75EDE83860967C2820D53F68B8C4463F7467E275E7EEA8A833D
+ManifestType: installer
+ManifestVersion: 1.12.0
