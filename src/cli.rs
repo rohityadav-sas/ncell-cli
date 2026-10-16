@@ -43,10 +43,10 @@ enum Command {
         #[command(subcommand)]
         action: script::ScriptCommand,
     },
-    /// Request an OTP and log in.
+    /// Request an OTP and log in
     Login {
         number: String,
-        #[arg(long)]
+        #[arg(long, help = "Continue a pending login with your OTP")]
         verify: bool,
     },
     /// Manage saved accounts
@@ -91,7 +91,7 @@ enum AccountCommand {
     /// Save an account without switching
     Add {
         number: String,
-        #[arg(long)]
+        #[arg(long, help = "Continue a pending login with your OTP")]
         verify: bool,
     },
     /// Remove a saved account locally
