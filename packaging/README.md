@@ -49,6 +49,14 @@ Once published, users can run `cargo install ncell-cli --locked`. Until then, us
 
 ## Updating
 
-For each new release, update the Cargo version, publish a new versioned ZIP, then update WinGet/Scoop versions, URLs and SHA-256 hashes. Update the Homebrew source reference, version and archive hash. Validate manifests and test the package before submitting another WinGet pull request. Release assets should remain immutable after package-manager publication.
+Releases update the manifests automatically: when a release is published, the
+release workflow builds every platform archive, then the `rehash` job
+downloads them, proves the Linux binary reports the release version, and
+commits the new Homebrew, Scoop and WinGet versions, URLs and SHA-256 hashes
+via `scripts/rehash-manifests.py`. It then dispatches the Homebrew validation
+workflow. Manual rebuild dispatches are excluded on purpose: their binaries do
+not match the tag, so a human owns the manifests there.
+
+Release assets should remain immutable after package-manager publication.
 
 

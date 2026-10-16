@@ -72,3 +72,49 @@ jobs:
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$asset"; then
             gh release upload "$TAG" "$asset" --repo "$GITHUB_REPOSITORY"
           fi
+  rehash:
+    # Point the package managers at the release this run just published.
+    # Manual rebuild dispatches (source-ref) are excluded: their binaries do
+    # not match the tag, so a human owns the manifests there.
+    needs: [build]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download release archives
+        run: |
+          mkdir -p .rehash
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'ncell-cli-*.zip' --dir .rehash
+          curl -fsSL "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/${TAG}.tar.gz" -o .rehash/source.tar.gz
+      - name: Prove the archives are this release
+        run: |
+          python -c "import zipfile; zipfile.ZipFile('.rehash/ncell-cli-${TAG}-linux-x86_64.zip').extract('ncell', '.rehash')"
+          test "$(./.rehash/ncell --version)" = "ncell-cli ${TAG#v}"
+      - name: Regenerate manifests
+        run: python scripts/rehash-manifests.py --tag "$TAG" --assets-dir .rehash
+      - name: Commit manifests
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
+          git add Formula bucket packaging
+          if git diff --cached --quiet; then
+            echo "Manifests already current; nothing to commit."
+          else
+            for attempt in 1 2 3; do
+              git pull --rebase origin main && git commit -m "Point Homebrew, Scoop and WinGet manifests at $TAG" && git push origin HEAD:main && break
+              [ "$attempt" = "3" ] && exit 1
+              sleep 10
+            done
+          fi
+      - name: Run Homebrew validation
+        run: gh workflow run homebrew.yml --repo "$GITHUB_REPOSITORY"
