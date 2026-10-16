@@ -1,0 +1,34 @@
+name: Auto release
+on:
+  push:
+    branches: [main]
+    paths: ['Cargo.toml']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tag and release a new Cargo version
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')
+          tag="v$version"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists; nothing to do."
+            exit 0
+          fi
+          # A tag without a release is ambiguous; refuse to guess and let a human sort it out.
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "::error::Tag $tag exists but has no release; create the release by hand."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$tag"
+          git push origin "$tag"
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "$tag" --generate-notes

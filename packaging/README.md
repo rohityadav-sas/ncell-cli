@@ -49,13 +49,12 @@ Once published, users can run `cargo install ncell-cli --locked`. Until then, us
 
 ## Updating
 
-Releases update the manifests automatically: when a release is published, the
-release workflow builds every platform archive, then the `rehash` job
-downloads them, proves the Linux binary reports the release version, and
-commits the new Homebrew, Scoop and WinGet versions, URLs and SHA-256 hashes
-via `scripts/rehash-manifests.py`. It then dispatches the Homebrew validation
-workflow. Manual rebuild dispatches are excluded on purpose: their binaries do
-not match the tag, so a human owns the manifests there.
+Bump the `Cargo.toml` version and push to `main`. The auto-release workflow
+tags the new version and creates the GitHub release with draft notes; edit the
+notes on the release page afterwards. Creating the release starts the binary
+builds, and the `rehash` job then points Homebrew, Scoop and WinGet at it and
+dispatches Homebrew validation. `cargo publish` stays manual (registry login),
+as does `npm publish` on the TypeScript side (login plus authenticator code).
 
 Release assets should remain immutable after package-manager publication.
 
