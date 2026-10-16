@@ -1032,7 +1032,7 @@ dependencies = [
 
 [[package]]
 name = "ncell-cli"
-version = "9.9.9"
+version = "9.9.10"
 dependencies = [
  "anstream",
  "chrono",
