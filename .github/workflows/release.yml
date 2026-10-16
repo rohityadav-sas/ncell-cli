@@ -78,6 +78,9 @@ jobs:
     # not match the tag, so a human owns the manifests there.
     needs: [build]
     if: github.event_name == 'release'
+    permissions:
+      contents: write
+      actions: write
     runs-on: ubuntu-latest
     env:
       TAG: ${{ github.ref_name }}
