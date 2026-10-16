@@ -5,6 +5,7 @@ on:
     paths: ['Cargo.toml']
 permissions:
   contents: write
+  actions: write
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -32,3 +33,8 @@ jobs:
           git tag "$tag"
           git push origin "$tag"
           gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "$tag" --generate-notes
+          # Releases created by this job do not fire the release event
+          # (bot-token actions never trigger workflows), so dispatch the
+          # binary build explicitly. Human-created releases still trigger it
+          # through the event, so exactly one run happens either way.
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" -f tag="$tag"
