@@ -97,6 +97,8 @@ jobs:
       - name: Prove the archives are this release
         run: |
           python -c "import zipfile; zipfile.ZipFile('.rehash/ncell-cli-${TAG}-linux-x86_64.zip').extract('ncell', '.rehash')"
+          # Zip extraction drops the Unix execute bit; restore it to run the proof.
+          chmod +x .rehash/ncell
           test "$(./.rehash/ncell --version)" = "ncell-cli ${TAG#v}"
       - name: Regenerate manifests
         run: python scripts/rehash-manifests.py --tag "$TAG" --assets-dir .rehash
