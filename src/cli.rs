@@ -43,7 +43,7 @@ enum Command {
         #[command(subcommand)]
         action: script::ScriptCommand,
     },
-    /// Request an OTP and log in. Use --verify to resume a pending login
+    /// Request an OTP and log in.
     Login {
         number: String,
         #[arg(long)]
