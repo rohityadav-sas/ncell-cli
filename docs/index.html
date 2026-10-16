@@ -779,15 +779,6 @@ brew install ncell-cli</code></pre>
 
             <h2 id="sessions">Sessions and token refresh</h2>
 
-            <p>
-
-                Tokens and device identity are stored in a local session file
-                (<code>%LOCALAPPDATA%\ncell-cli\session.json</code> on Windows,
-                <code>~/Library/Application Support/ncell-cli/</code> on macOS,
-                <code>~/.config/ncell-cli/</code> on Linux) readable only by you.
-
-            </p>
-
             <h3 id="sessions-auto">Automatic refresh</h3>
             <p>
                 The saved refresh token is used automatically to refresh the access token when it expires.
@@ -887,18 +878,13 @@ brew install ncell-cli</code></pre>
             <h3 id="searching-sort">Sort by more than one field</h3>
 
             <h4>Combine sort fields</h4>
-            <p>Separate ordered sort fields with commas. This searches SMS plans and sorts by validity descending, then
-                price ascending.</p>
+            <p>Separate ordered sort fields with commas.</p>
             <pre
                 data-lang="Shell"><code>ncell plans search "SMS" --category 50 --sort validity:desc,price:asc</code></pre>
 
             <h4>Repeat the sort option</h4>
             <p>Alternatively, supply one sort field per option.</p>
             <pre data-lang="Shell"><code>ncell plans --sort validity:desc --sort price:asc</code></pre>
-
-            <h4>Use the default direction</h4>
-            <p>Omit directions to sort both fields in ascending order.</p>
-            <pre data-lang="Shell"><code>ncell plans --sort validity,price</code></pre>
 
             <p>
 
@@ -916,15 +902,14 @@ brew install ncell-cli</code></pre>
             <pre data-lang="Shell"><code>ncell plans --category 50</code></pre>
 
             <h3>Subscribe</h3>
-            <p>Use the plan ID and its category. Paid packs charge your Ncell account, so the
+            <p>Use the plan ID and its category. Paid packs deducts money from your balance, so the
                 command shows the name and price and asks for confirmation. Use
-                <code>--yes</code> for scripts (required when input is piped) and
-                <code>--dry-run</code> to preview without spending.
+                <code>--yes</code> to skip it (usually, used in scripts).
             </p>
             <pre data-lang="Shell"><code>ncell plans subscribe 984 --category 50</code></pre>
 
             <p>The plan ID is a required positional argument. Use a category ID from the category list;
-                <code>--category</code> defaults to 66.
+                <code>--category</code> defaults to <code>66</code>.
             </p>
 
             <h2 id="sms">Send Free SMS</h2>
@@ -969,20 +954,14 @@ Math win | Score 165</code></pre>
             <p>Play a scratch card using your game tokens.</p>
             <pre data-lang="Shell"><code>ncell game scratch</code></pre>
 
-            <pre data-lang="Output"><code>Game          Reward                  Tokens        Points
-----------------------------------------------------------
-
-Scratch 1     50 Points                  160         6,695</code></pre>
+            <pre data-lang="Output"><code>Scratch 1 completed. Reward awarded: 50. Game tokens: 160. Weekly points: 6695.</code></pre>
 
             <h3 id="games-spin">Spinner</h3>
             <p>Spin using your game tokens.</p>
 
             <pre data-lang="Shell"><code>ncell game spin</code></pre>
 
-            <pre data-lang="Output"><code>Game          Reward                  Tokens        Points
-----------------------------------------------------------
-
-Spin 1        50 Points                  160         6,695</code></pre>
+            <pre data-lang="Output"><code>Spin 1 completed. Reward awarded: 50. Game tokens: 160. Weekly points: 6695.</code></pre>
 
             <h3 id="games-ranks">Rankings</h3>
             <p>Shows your weekly performance, last week&#x27;s result, prizes and leaderboard.</p>
