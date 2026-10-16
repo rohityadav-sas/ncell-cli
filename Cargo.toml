@@ -1,6 +1,6 @@
 [package]
 name = "ncell-cli"
-version = "9.9.10"
+version = "9.9.11"
 edition = "2024"
 description = "Cross-platform Ncell CLI for OTP login, balances, plans and free SMS"
 license = "MIT"
