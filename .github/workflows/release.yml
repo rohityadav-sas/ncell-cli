@@ -10,6 +10,10 @@ on:
       source-ref:
         description: Source commit override for an existing release
         required: false
+      full:
+        description: Run rehash and publish too (only for real releases, never for rebuilds)
+        required: false
+        default: 'false'
 permissions:
   contents: write
 jobs:
@@ -74,10 +78,11 @@ jobs:
           fi
   rehash:
     # Point the package managers at the release this run just published.
-    # Manual rebuild dispatches (source-ref) are excluded: their binaries do
-    # not match the tag, so a human owns the manifests there.
+    # Manual rebuild dispatches (source-ref, or full != true) are excluded:
+    # their binaries do not necessarily match the tag, so a human owns the
+    # manifests there.
     needs: [build]
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || inputs.full == 'true'
     permissions:
       contents: write
       actions: write
@@ -131,7 +136,7 @@ jobs:
     # before the real upload, so re-running is always safe.
     # Manual rebuild dispatches are excluded like in rehash.
     needs: [build]
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || inputs.full == 'true'
     runs-on: ubuntu-latest
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
