@@ -11,6 +11,6 @@ Commands:
 Installers:
 - Architecture: x64
   InstallerUrl: https://github.com/rohityadav-sas/ncell-cli/releases/download/v9.9.11/ncell-cli-v9.9.11-windows-x86_64.zip
-  InstallerSha256: 41EB4AF814F0C75EDE83860967C2820D53F68B8C4463F7467E275E7EEA8A833D
+  InstallerSha256: 8379B3D089D465764849C74DF2109EDBFA38C9A69256E630E78FFC64DE303546
 ManifestType: installer
 ManifestVersion: 1.12.0
