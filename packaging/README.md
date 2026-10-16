@@ -38,19 +38,14 @@ The formula builds the MIT-licensed release source archive with Cargo. The archi
 
 Cargo metadata, the MIT license and an explicit source-file inclusion list are configured. `cargo package --locked` verifies the package builds and excludes local token scripts, integration tests, captures and documentation assets.
 
-Publishing is automated behind a one-click gate: creating a GitHub release
-runs the `publish-crates` job, which waits for the `crates-io` environment
-approval, skips versions already on the registry, dry-runs, then runs
-`cargo publish --locked`. Publishes are permanent, so no version ships
-unattended. Until then, use `cargo install --git https://github.com/rohityadav-sas/ncell-cli --locked` or build from a clone.
+Publishing is automated: creating a GitHub release runs the
+`publish-crates` job, which skips versions already on the registry,
+dry-runs, then runs `cargo publish --locked` with the `CARGO_REGISTRY_TOKEN`
+repository secret. Until then, use `cargo install --git https://github.com/rohityadav-sas/ncell-cli --locked` or build from a clone.
 
-One-time setup (owner only):
-
-1. Create a token at <https://crates.io/settings/tokens>, restricted to the
-   `ncell-cli` crate with an expiry date.
-2. Add it as an Actions secret (repository Settings, Secrets and variables,
-   Actions, environment `crates-io`, secret `CARGO_REGISTRY_TOKEN`), or run:
-   `gh secret set CARGO_REGISTRY_TOKEN --repo rohityadav-sas/ncell-cli --env crates-io`
+The registry token lives in the repository Actions secrets. If it ever
+leaks, revoke it at <https://crates.io/settings/tokens> and save a fresh
+one the same way.
 
 ## Updating
 

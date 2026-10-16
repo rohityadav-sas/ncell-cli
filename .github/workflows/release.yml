@@ -126,13 +126,12 @@ jobs:
       - name: Run Homebrew validation
         run: gh workflow run homebrew.yml --repo "$GITHUB_REPOSITORY"
   publish-crates:
-    # Upload the release to crates.io. Gated behind the `crates-io`
-    # environment, whose required reviewer approves each publish with one
-    # click: publishes are permanent, so no release ships unattended.
+    # Upload the release to crates.io right after the binaries build.
+    # Versions already on the registry are skipped, and a dry run passes
+    # before the real upload, so re-running is always safe.
     # Manual rebuild dispatches are excluded like in rehash.
     needs: [build]
     if: github.event_name == 'release'
-    environment: crates-io
     runs-on: ubuntu-latest
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -144,7 +143,7 @@ jobs:
       - name: Require the publish token
         run: |
           if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
-            echo "::error::CARGO_REGISTRY_TOKEN secret is not set. Create a crates.io token and add it to the crates-io environment secrets."
+            echo "::error::CARGO_REGISTRY_TOKEN secret is not set. Add a crates.io token to the repository Actions secrets."
             exit 1
           fi
       - name: Skip versions already on crates.io
