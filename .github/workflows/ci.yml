@@ -16,9 +16,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: rustup show active-toolchain || rustup toolchain install
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -33,9 +33,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: rustup show active-toolchain || rustup toolchain install
       # Clippy stays per-OS on purpose: open_docs, session_dir and the
       # script editor all have target_os branches that Ubuntu alone never
       # lints. The shared cache makes the extra legs cheap.
