@@ -632,7 +632,7 @@
 
                         </svg></span><span><span class="card-title">Installation</span><span class="card-text">Install
 
-                            with WinGet, Scoop or Homebrew.</span></span></a>
+                            with one command, WinGet, Scoop or Homebrew.</span></span></a>
 
                 <a class="card" href="#login"><span class="icon-tile"><svg class="ico" aria-hidden="true">
 
@@ -678,6 +678,31 @@
             </nav>
 
             <h2 id="installation">Installation</h2>
+
+            <h3 id="installation-script-unix">Install script · Linux / macOS</h3>
+
+            <pre data-lang="Shell"><code>curl -fsSL https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.sh | sh</code></pre>
+
+            <h3 id="installation-script-windows">Install script · Windows</h3>
+
+            <pre data-lang="PowerShell"><code>irm https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.ps1 | iex</code></pre>
+
+            <p>The script downloads the prebuilt binary for your OS and CPU from the latest release. It needs no admin
+                rights or sudo. On Linux and macOS it installs to <code>~/.local/bin</code> (needs <code>curl</code> or
+                <code>wget</code>, plus <code>unzip</code>) and prints the line to add if that folder is not on your
+                <code>PATH</code>. On Windows it installs to <code>%LOCALAPPDATA%\Programs\ncell-cli</code> and adds
+                that folder to your user <code>PATH</code>. Run the same command again to update.</p>
+
+            <p>Set <code>NCELL_VERSION</code> to install a specific release, or <code>NCELL_INSTALL_DIR</code> to
+                choose the folder (it must be absolute on Linux and macOS; on Windows, relative paths are converted to
+                full paths before installation):</p>
+
+            <pre data-lang="Shell"><code>curl -fsSL https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.sh | NCELL_VERSION=v0.5.3 sh</code></pre>
+
+            <pre data-lang="PowerShell"><code>$env:NCELL_VERSION = 'v0.5.3'; irm https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.ps1 | iex</code></pre>
+
+            <p>To uninstall, delete the <code>ncell</code> binary from the install folder. On Windows, also remove that
+                folder from your user <code>PATH</code>.</p>
 
             <h3 id="installation-winget">WinGet · Windows</h3>
 

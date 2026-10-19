@@ -4,7 +4,7 @@ import subprocess
 
 root = Path(__file__).resolve().parent.parent
 suffixes = {".md", ".rs", ".toml", ".lock", ".json", ".yml", ".yaml",
-            ".html", ".css", ".js", ".py", ".txt", ".ps1", ".svg"}
+            ".html", ".css", ".js", ".py", ".txt", ".ps1", ".sh", ".svg"}
 names = subprocess.check_output(["git", "ls-files", "-z"], cwd=root).decode("utf-8").split("\0")
 for name in filter(None, names):
     path = root / name

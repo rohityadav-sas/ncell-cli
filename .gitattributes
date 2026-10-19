@@ -1,0 +1,2 @@
+# The install script is piped straight into sh; CRLF line endings would break it.
+install.sh text eol=lf

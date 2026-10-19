@@ -2,6 +2,20 @@
 
 The Windows ZIP contains `ncell.exe` and the MIT license. Its checksum is pinned in the Scoop and WinGet manifests. Do not replace a published archive after a package manager accepts its checksum; use a new version for future changes.
 
+## Install scripts
+
+`install.sh` (Linux and macOS) and `install.ps1` (Windows) at the repository root are the one-line installers shown in the README and documentation:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.sh | sh
+```
+
+```powershell
+irm https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.ps1 | iex
+```
+
+They read the GitHub release API, pick the asset ending in `<os>-<arch>.zip` (the names `release.yml` produces) and install `ncell` or `ncell.exe` from the archive root. There is no manifest or checksum to rehash: a new release is picked up automatically. If the archive layout or the `ncell-cli-<tag>-<platform>.zip` naming in `release.yml` ever changes, update both scripts. `NCELL_VERSION` pins a tag and `NCELL_INSTALL_DIR` changes the install folder. `.gitattributes` keeps `install.sh` on LF line endings.
+
 ## WinGet
 
 `winget/0.1.0/` contains the validated manifest set for `RohitYadav.NcellCLI`. Submission: https://github.com/microsoft/winget-pkgs/pull/450764. Community-source availability requires Microsoft to merge the submission. The owner must review and accept Microsoft's CLA in the bot comment before the submission can proceed. After acceptance:
