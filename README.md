@@ -61,11 +61,11 @@ Linux and macOS need `curl` or `wget`, plus `unzip`.
 Install a specific version or folder with environment variables:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.sh | NCELL_VERSION=v0.5.3 sh
+curl -fsSL https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.sh | NCELL_VERSION=v0.5.4 sh
 ```
 
 ```powershell
-$env:NCELL_VERSION = 'v0.5.3'; irm https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.ps1 | iex
+$env:NCELL_VERSION = 'v0.5.4'; irm https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.ps1 | iex
 ```
 
 `NCELL_INSTALL_DIR` changes the install folder in both scripts. On Linux and macOS it must be an absolute path; on Windows, relative paths are converted to full paths before installation. Re-run the same command at any time to update.
