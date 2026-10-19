@@ -12,6 +12,12 @@ use serde_json::{Value, json};
 use std::io::{self, IsTerminal, Write};
 use std::time::{Duration, Instant};
 
+const DOCS_URL: &str = env!("CARGO_PKG_HOMEPAGE");
+const _: () = assert!(
+    !DOCS_URL.is_empty(),
+    "Set package.homepage in Cargo.toml to the online documentation URL"
+);
+
 #[derive(Parser, Clone)]
 #[command(
     name = "ncell-cli",
@@ -673,12 +679,11 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
             );
         }
         Command::Docs => {
-            let file = docs_file()?;
-            open_docs(&file)?;
+            open_docs(DOCS_URL)?;
             output(
                 args.json,
-                json!({"opened": file.to_string_lossy()}),
-                format!("Opened documentation at {}.", file.display()),
+                json!({"opened": DOCS_URL}),
+                format!("Opened documentation at {DOCS_URL}."),
             );
         }
         Command::Login { number, verify } => {
@@ -932,60 +937,32 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
     Ok(())
 }
 
-/// Packaged documentation page; resolvable from a release archive or a checkout.
-fn docs_file() -> Result<std::path::PathBuf> {
-    let from_exe = std::env::current_exe().ok().and_then(|exe| {
-        exe.parent()
-            .map(|dir| dir.join("docs/index.html"))
-            .filter(|page| page.is_file())
-            .or_else(|| {
-                // Cargo target layout when running from a source checkout.
-                exe.parent().and_then(|dir| {
-                    let page: std::path::PathBuf =
-                        dir.join("../../docs/index.html").components().collect();
-                    page.is_file().then_some(page)
-                })
-            })
-    });
-    if let Some(page) = from_exe {
-        return Ok(page);
-    }
-    let nearby = std::env::current_dir()
-        .ok()
-        .map(|dir| dir.join("docs/index.html"));
-    if let Some(page) = nearby.filter(|page| page.is_file()) {
-        return Ok(page);
-    }
-    Err(Error::Script(
-        "Documentation is not installed next to this binary".into(),
-    ))
-}
-
-/// Open a file in the default browser without waiting for it to close.
-fn open_docs(file: &std::path::Path) -> Result<()> {
+/// Open a URL in the default browser without waiting for it to close.
+fn open_docs(url: &str) -> Result<()> {
     #[cfg(target_os = "windows")]
     let command = std::process::Command::new("rundll32.exe")
         .arg("url.dll,FileProtocolHandler")
-        .arg(file)
+        .arg(url)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn();
     #[cfg(target_os = "macos")]
     let command = std::process::Command::new("open")
-        .arg(file)
+        .arg(url)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn();
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     let command = std::process::Command::new("xdg-open")
-        .arg(file)
+        .arg(url)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn();
-    command.map_err(|_| Error::Script("Could not open the documentation in a browser".into()))?;
+    command
+        .map_err(|_| Error::Script(format!("Could not open a browser. Documentation: {url}")))?;
     Ok(())
 }
 
