@@ -12,9 +12,9 @@ fn uses_system_editor_and_preserves_created_file_on_launch_failure() {
         // is asserted, not one fixed editor.
         let actual = editor_arguments();
         assert_eq!(actual.len(), 1);
-        let expected = std::env::var("EDITOR").ok().filter(|value| {
-            !value.trim().is_empty() && actual == [value.to_owned()]
-        });
+        let expected = std::env::var("EDITOR")
+            .ok()
+            .filter(|value| !value.trim().is_empty() && actual == [value.to_owned()]);
         let fallback = if expected.is_none() {
             ["nano", "vim", "vi", "xdg-open"].contains(&actual[0].as_str())
         } else {

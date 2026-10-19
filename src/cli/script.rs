@@ -182,7 +182,10 @@ enum EditorStdio {
     /// This process's stdio is captured (piped) by the interactive shell, so
     /// the editor is wired to the real console instead of the capture pipes.
     #[cfg(not(windows))]
-    Console(#[allow(dead_code)] std::fs::File, #[allow(dead_code)] std::fs::File),
+    Console(
+        #[allow(dead_code)] std::fs::File,
+        #[allow(dead_code)] std::fs::File,
+    ),
 }
 fn editor_attached_output(json_output: bool) -> EditorStdio {
     let _ = json_output;
@@ -196,7 +199,10 @@ fn editor_attached_output(json_output: bool) -> EditorStdio {
             return EditorStdio::Inherit;
         }
         match (
-            std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty"),
+            std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open("/dev/tty"),
             std::fs::OpenOptions::new().write(true).open("/dev/tty"),
         ) {
             (Ok(input), Ok(output)) => EditorStdio::Console(input, output),

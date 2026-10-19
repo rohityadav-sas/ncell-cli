@@ -542,7 +542,10 @@ impl ScrollRate {
     const WINDOW: Duration = Duration::from_millis(100);
     const BUDGET: isize = 10;
     fn grant(&mut self, delta: isize, now: Instant) -> isize {
-        if self.window.is_none_or(|window| now.duration_since(window) >= Self::WINDOW) {
+        if self
+            .window
+            .is_none_or(|window| now.duration_since(window) >= Self::WINDOW)
+        {
             self.window = Some(now);
             self.used = 0;
         }
