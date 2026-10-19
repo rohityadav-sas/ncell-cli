@@ -7,12 +7,21 @@ fn uses_system_editor_and_preserves_created_file_on_launch_failure() {
     assert_eq!(editor_arguments(), ["open", "-t", "-W"]);
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
-        // Which binary exists depends on the machine (CI images ship nano
-        // and vi), so only the probe order is asserted, not one fixed editor.
+        // $EDITOR wins when set; otherwise whichever binary exists on this
+        // machine (CI images ship nano and vim/vi), so only the probe family
+        // is asserted, not one fixed editor.
         let actual = editor_arguments();
         assert_eq!(actual.len(), 1);
+        let expected = std::env::var("EDITOR").ok().filter(|value| {
+            !value.trim().is_empty() && actual == [value.to_owned()]
+        });
+        let fallback = if expected.is_none() {
+            ["nano", "vim", "vi", "xdg-open"].contains(&actual[0].as_str())
+        } else {
+            false
+        };
         assert!(
-            ["nano", "vi", "xdg-open"].contains(&actual[0].as_str()),
+            expected.is_some() || fallback,
             "unexpected editor: {actual:?}"
         );
     }

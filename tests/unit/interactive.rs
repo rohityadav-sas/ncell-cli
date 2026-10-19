@@ -387,3 +387,32 @@ fn pack_cache_expires_after_five_minutes_and_acceptance_routes_sms_catalog() {
         })
     ));
 }
+
+#[test]
+fn scroll_rate_grants_every_notched_tick_but_caps_smooth_scroll_floods() {
+    let start = Instant::now();
+    // A notched wheel: one tick well inside every window is always granted.
+    let mut rate = ScrollRate::default();
+    for tick in 0..20usize {
+        assert_eq!(
+            rate.grant(3, start + Duration::from_millis((tick * 250) as u64)),
+            3,
+            "tick {tick}"
+        );
+    }
+    // A trackpad/smooth-scroll flood within one window is capped.
+    let mut rate = ScrollRate::default();
+    let granted: isize = (0..40)
+        .map(|event| rate.grant(3, start + Duration::from_millis(event as u64)))
+        .sum();
+    assert_eq!(granted, ScrollRate::BUDGET);
+    // Budget refills on the next window.
+    assert_eq!(
+        rate.grant(3, start + ScrollRate::WINDOW + Duration::from_millis(1)),
+        3
+    );
+    // Both directions and zero are handled.
+    let mut rate = ScrollRate::default();
+    assert_eq!(rate.grant(-30, start), -ScrollRate::BUDGET);
+    assert_eq!(rate.grant(0, start), 0);
+}

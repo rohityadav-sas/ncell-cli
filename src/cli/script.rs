@@ -126,6 +126,8 @@ fn resolve_script(file: PathBuf) -> Result<PathBuf> {
 /// `open -t` on macOS now passes `-W` so it waits instead of returning at once.
 /// Plain `xdg-open` cannot wait or guarantee an editor, so real editors are
 /// probed first on Linux and $EDITOR always wins everywhere (Windows included).
+/// On Windows, GUI editors such as Notepad launch and depend on the console
+/// only for exit status, so they are returned as-is.
 fn editor_arguments() -> Vec<String> {
     for key in ["VISUAL", "EDITOR"] {
         if let Some(command) = std::env::var(key)
@@ -144,10 +146,13 @@ fn editor_arguments() -> Vec<String> {
     return vec!["open".into(), "-t".into(), "-W".into()];
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
-        for editor in ["nano", "vi"] {
+        for editor in ["nano", "vim", "vi"] {
             if std::process::Command::new(editor)
                 .arg("--version")
-                .output()
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
                 .is_ok()
             {
                 return vec![editor.into()];
@@ -169,6 +174,36 @@ fn create_file(
     drop(output);
     open(file)
 }
+
+/// Stdio for launching the terminal editor.
+enum EditorStdio {
+    /// The editor owns the same stdin/stdout/stderr as this process.
+    Inherit,
+    /// This process's stdio is captured (piped) by the interactive shell, so
+    /// the editor is wired to the real console instead of the capture pipes.
+    #[cfg(not(windows))]
+    Console(#[allow(dead_code)] std::fs::File, #[allow(dead_code)] std::fs::File),
+}
+fn editor_attached_output(json_output: bool) -> EditorStdio {
+    let _ = json_output;
+    #[cfg(windows)]
+    {
+        EditorStdio::Inherit
+    }
+    #[cfg(not(windows))]
+    {
+        if std::env::var_os("NCELL_CAPTURED").is_none() {
+            return EditorStdio::Inherit;
+        }
+        match (
+            std::fs::OpenOptions::new().read(true).write(true).open("/dev/tty"),
+            std::fs::OpenOptions::new().write(true).open("/dev/tty"),
+        ) {
+            (Ok(input), Ok(output)) => EditorStdio::Console(input, output),
+            _ => EditorStdio::Inherit,
+        }
+    }
+}
 fn edit_script(file: &std::path::Path, json_output: bool) -> Result<()> {
     if !fs::metadata(file)
         .map_err(|e| fail(format!("Could not open {}: {e}", file.display())))?
@@ -177,23 +212,42 @@ fn edit_script(file: &std::path::Path, json_output: bool) -> Result<()> {
         return Err(fail("The saved script is not a file"));
     }
     let arguments = editor_arguments();
-    let status = std::process::Command::new(&arguments[0])
-        .args(&arguments[1..])
-        .arg(file)
-        .stdin(std::process::Stdio::inherit())
-        .stdout(if json_output {
-            std::process::Stdio::from(io::stderr())
-        } else {
-            std::process::Stdio::inherit()
-        })
-        .stderr(std::process::Stdio::inherit())
-        .status()
-        .map_err(|e| {
-            fail(format!(
-                "Script is saved at {} but the editor could not open: {e}",
-                file.display()
-            ))
-        })?;
+    let mut command = std::process::Command::new(&arguments[0]);
+    command.args(&arguments[1..]).arg(file);
+    match editor_attached_output(json_output) {
+        EditorStdio::Inherit => {
+            command
+                .stdin(std::process::Stdio::inherit())
+                .stdout(if json_output {
+                    std::process::Stdio::from(io::stderr())
+                } else {
+                    std::process::Stdio::inherit()
+                })
+                .stderr(std::process::Stdio::inherit());
+        }
+        #[cfg(not(windows))]
+        EditorStdio::Console(input, output) => {
+            // stderr shares the same console description so editor messages
+            // and full-screen output all reach the real terminal.
+            let stderr = match output.try_clone() {
+                Ok(stderr) => stderr,
+                Err(_) => std::fs::OpenOptions::new()
+                    .write(true)
+                    .open("/dev/null")
+                    .unwrap_or_else(|_| std::fs::File::create("/dev/null").unwrap()),
+            };
+            command
+                .stdin(std::process::Stdio::from(input))
+                .stdout(std::process::Stdio::from(output))
+                .stderr(std::process::Stdio::from(stderr));
+        }
+    }
+    let status = command.status().map_err(|e| {
+        fail(format!(
+            "Script is saved at {} but the editor could not open: {e}",
+            file.display()
+        ))
+    })?;
     if !status.success() {
         return Err(fail(format!(
             "Editor exited unsuccessfully. Script remains saved at {}",

@@ -528,6 +528,34 @@ impl Transcript {
     }
 }
 
+/// Numerically-scaled wheel events from trackpads and smooth-scrolling
+/// terminals arrive many times faster than a notched mouse wheel, so the
+/// transcript would scroll much faster than the same terminal Scrollback.
+/// Granting at most `BUDGET` lines per window caps the speed at that of a
+/// rapidly rolled wheel; a single physical tick never hits the cap.
+#[derive(Default)]
+struct ScrollRate {
+    window: Option<Instant>,
+    used: isize,
+}
+impl ScrollRate {
+    const WINDOW: Duration = Duration::from_millis(100);
+    const BUDGET: isize = 10;
+    fn grant(&mut self, delta: isize, now: Instant) -> isize {
+        if self.window.is_none_or(|window| now.duration_since(window) >= Self::WINDOW) {
+            self.window = Some(now);
+            self.used = 0;
+        }
+        let room = Self::BUDGET - self.used;
+        if room <= 0 || delta == 0 {
+            return 0;
+        }
+        let applied = delta.clamp(-room, room);
+        self.used += applied.abs();
+        applied
+    }
+}
+
 fn view_height() -> usize {
     usize::from(terminal::size().unwrap_or((80, 24)).1).max(1)
 }
@@ -1468,6 +1496,7 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
     let mut packs = CategoryCache::default();
     let mut reserved = 0usize;
     let mut dirty = true;
+    let mut scroll_rate = ScrollRate::default();
     loop {
         dirty |= categories.poll();
         dirty |= packs.poll();
@@ -1539,7 +1568,13 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
                 } else {
                     -3
                 };
-                transcript.scroll_by(delta, view_height());
+                let applied = scroll_rate.grant(delta, Instant::now());
+                if applied != 0 {
+                    transcript.scroll_by(applied, view_height());
+                } else {
+                    // Fully rate-limited: nothing changed, skip the repaint.
+                    dirty = false;
+                }
                 Action::Continue
             }
             Event::Key(key) => {
