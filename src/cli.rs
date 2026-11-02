@@ -110,6 +110,7 @@ enum AccountCommand {
 
 #[derive(clap::Args, Clone)]
 struct PlanOptions {
+    /// Plan category ID
     #[arg(long, default_value_t = DEFAULT_PLAN_CATEGORY)]
     category: u64,
     /// Sort by a column
@@ -130,6 +131,7 @@ enum PlanCommand {
     /// Subscribe to a plan
     Subscribe {
         id: String,
+        /// Plan category ID
         #[arg(long, default_value_t = DEFAULT_PLAN_CATEGORY)]
         category: u64,
         /// Skip the confirmation prompt (required for scripts and pipes)

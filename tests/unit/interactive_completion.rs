@@ -70,6 +70,7 @@ fn flags_prioritize_action_options_and_hide_flags_already_used() {
         values(&result),
         ["--category", "--sort", "--json", "--help"]
     );
+    assert_eq!(result.suggestions[0].description, "Plan category ID");
     let result = options("login 9812345678 --verify --", false);
     assert!(!values(&result).contains(&"--verify"));
     assert!(values(&result).contains(&"--help"));
