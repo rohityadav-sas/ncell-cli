@@ -11,7 +11,7 @@ on:
         description: Source commit override for an existing release
         required: false
       full:
-        description: Run rehash and publish too (only for real releases, never for rebuilds)
+        description: Run publish too (only for real releases, never for rebuilds)
         required: false
         default: 'false'
 permissions:
@@ -78,66 +78,11 @@ jobs:
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$asset"; then
             gh release upload "$TAG" "$asset" --repo "$GITHUB_REPOSITORY"
           fi
-  rehash:
-    # Point the package managers at the release this run just published.
-    # TAG resolves the same way as the build jobs: the release event's tag,
-    # or the dispatched tag. Manual rebuilds without full=true (or with a
-    # source-ref override) are excluded: their binaries do not necessarily
-    # match the tag, so a human owns the manifests there.
-    needs: [build]
-    if: github.event_name == 'release' || (inputs.full == 'true' && inputs.source-ref == '')
-    permissions:
-      contents: write
-      actions: write
-    runs-on: ubuntu-latest
-    env:
-      TAG: ${{ inputs.tag || github.ref_name }}
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: main
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - name: Download release archives
-        run: |
-          mkdir -p .rehash
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'ncell-cli-*.zip' --dir .rehash
-          curl -fsSL "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/${TAG}.tar.gz" -o .rehash/source.tar.gz
-      - name: Prove the archives are this release
-        run: |
-          python -c "import zipfile; zipfile.ZipFile('.rehash/ncell-cli-${TAG}-linux-x86_64.zip').extract('ncell', '.rehash')"
-          # Zip extraction drops the Unix execute bit; restore it to run the proof.
-          chmod +x .rehash/ncell
-          test "$(./.rehash/ncell --version)" = "ncell-cli ${TAG#v}"
-      - name: Regenerate manifests
-        run: python scripts/rehash-manifests.py --tag "$TAG" --assets-dir .rehash
-      - name: Commit manifests
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git checkout -B main origin/main
-          git add Formula bucket packaging
-          if git diff --cached --quiet; then
-            echo "Manifests already current; nothing to commit."
-          else
-            git commit -m "Point Homebrew, Scoop and WinGet manifests at $TAG"
-            for attempt in 1 2 3; do
-              git pull --rebase origin main && git push origin HEAD:main && break
-              git rebase --abort 2>/dev/null || true
-              [ "$attempt" = "3" ] && exit 1
-              sleep 10
-            done
-          fi
-      - name: Run Homebrew validation
-        run: gh workflow run homebrew.yml --repo "$GITHUB_REPOSITORY"
   publish-crates:
     # Upload the release to crates.io right after the binaries build.
     # Versions already on the registry are skipped, and a dry run passes
     # before the real upload, so re-running is always safe.
-    # Manual rebuild dispatches are excluded like in rehash.
+    # Manual rebuild dispatches are excluded without full=true.
     needs: [build]
     if: github.event_name == 'release' || (inputs.full == 'true' && inputs.source-ref == '')
     runs-on: ubuntu-latest

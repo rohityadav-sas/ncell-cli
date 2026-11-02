@@ -72,26 +72,6 @@ $env:NCELL_VERSION = 'v0.5.4'; irm https://raw.githubusercontent.com/rohityadav-
 
 To uninstall, delete the `ncell` binary from the install folder. On Windows, also remove that folder from your user `PATH`.
 
-**WinGet (Windows)**
-
-```powershell
-winget install --id RohitYadav.NcellCLI
-```
-
-**Scoop (Windows)**
-
-```powershell
-scoop bucket add ncell-cli https://github.com/rohityadav-sas/ncell-cli
-scoop install ncell-cli
-```
-
-**Homebrew (macOS / Linux)**
-
-```sh
-brew tap rohityadav-sas/ncell-cli https://github.com/rohityadav-sas/ncell-cli
-brew install ncell-cli
-```
-
 **From source**
 
 Install [rustup](https://rustup.rs/) and Git, then clone the repository and install the executable on your `PATH`:

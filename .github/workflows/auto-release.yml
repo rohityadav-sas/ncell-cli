@@ -37,5 +37,5 @@ jobs:
           # (bot-token actions never trigger workflows), so dispatch the
           # binary build explicitly. Human-created releases still trigger it
           # through the event, so exactly one run happens either way.
-          # full=true marks this as a real release, enabling rehash+publish.
+          # full=true marks this as a real release, enabling publish.
           gh workflow run release.yml --repo "$GITHUB_REPOSITORY" -f tag="$tag" -f full=true
