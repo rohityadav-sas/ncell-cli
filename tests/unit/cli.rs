@@ -342,3 +342,13 @@ fn sorting_compares_numeric_prices_and_normalized_durations() {
     assert_eq!(sort_key(&json!({}), Sort::Price), f64::INFINITY);
     assert_eq!(sort_key(&json!({}), Sort::Id), f64::INFINITY);
 }
+
+#[test]
+fn update_flag_and_command_are_parsed() {
+    let args = Args::try_parse_from(["ncell", "-U"]).unwrap();
+    assert!(args.update);
+    let args = Args::try_parse_from(["ncell", "--update"]).unwrap();
+    assert!(args.update);
+    let args = Args::try_parse_from(["ncell", "update"]).unwrap();
+    assert!(matches!(args.command, Some(Command::Update)));
+}

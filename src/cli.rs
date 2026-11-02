@@ -34,6 +34,9 @@ pub struct Args {
     /// Print version
     #[arg(long, action = clap::ArgAction::Version)]
     pub version: Option<bool>,
+    /// Check for updates and install the latest release
+    #[arg(short = 'U', long)]
+    pub update: bool,
     /// Print structured JSON output
     #[arg(long, global = true)]
     pub json: bool,
@@ -90,6 +93,8 @@ enum Command {
     Refresh,
     /// Open documentation
     Docs,
+    /// Check for updates and install the latest release
+    Update,
 }
 
 #[derive(Subcommand, Clone)]
@@ -356,6 +361,9 @@ pub fn run(args: Args) -> Result<()> {
 }
 fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
     validate_args(&args).map_err(Error::Script)?;
+    if args.update {
+        return ncell_cli::update::run(None, args.json);
+    }
     if matches!(
         &args.command,
         Some(
@@ -689,6 +697,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                 format!("Opened documentation at {DOCS_URL}."),
             );
         }
+        Command::Update => return ncell_cli::update::run(None, args.json),
         Command::Login { number, verify } => {
             login(runtime.client()?, &number, verify, true, args.json)?
         }

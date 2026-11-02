@@ -24,11 +24,13 @@ ctrlc = "3.5.2"
 fasteval = "0.2"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "cookies", "json", "multipart", "rustls-tls"] }
 scraper = { version = "0.24", default-features = false }
+self-replace = "1.5.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 unicode-width = "0.2"
 uuid = { version = "1", features = ["v4"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 mockito = "1"

@@ -68,7 +68,17 @@ curl -fsSL https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/insta
 $env:NCELL_VERSION = 'v0.5.4'; irm https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.ps1 | iex
 ```
 
-`NCELL_INSTALL_DIR` changes the install folder in both scripts. On Linux and macOS it must be an absolute path; on Windows, relative paths are converted to full paths before installation. Re-run the same command at any time to update.
+`NCELL_INSTALL_DIR` changes the install folder in both scripts. On Linux and macOS it must be an absolute path; on Windows, relative paths are converted to full paths before installation.
+
+### Updating
+
+Run `ncell -U` (or `ncell update`) at any time to check for and install the latest release:
+
+```sh
+ncell -U
+```
+
+You can also re-run the quick install command above to update.
 
 To uninstall, delete the `ncell` binary from the install folder. On Windows, also remove that folder from your user `PATH`.
 

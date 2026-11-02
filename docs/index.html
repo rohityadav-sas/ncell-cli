@@ -559,6 +559,15 @@
             <pre
                 data-lang="PowerShell"><code>$env:NCELL_VERSION = 'v0.5.4'; irm https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.ps1 | iex</code></pre>
 
+            <h3>Updating</h3>
+            <p>
+                Check for and install the latest release automatically:
+            </p>
+            <pre data-lang="Shell"><code>ncell -U</code></pre>
+            <p>
+                You can also run <code>ncell update</code> or re-run the install script above.
+            </p>
+
             <p>
                 To uninstall, delete the <code>ncell</code> binary from the
                 install folder.
@@ -1317,6 +1326,16 @@ ncell game ranks
                                     <td><code>--version</code></td>
 
                                     <td>Shows CLI version</td>
+                                </tr>
+
+                                <tr>
+                                    <td>
+                                        <code>-U</code>, <code>--update</code>, <code>update</code>
+                                    </td>
+
+                                    <td>
+                                        Check for updates and install the latest release
+                                    </td>
                                 </tr>
 
                                 <tr>

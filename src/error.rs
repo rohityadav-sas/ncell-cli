@@ -42,6 +42,8 @@ pub enum Error {
     NotLoggedIn,
     #[error("Could not read the OTP from the terminal")]
     Prompt,
+    #[error("Update failed: {0}")]
+    Update(String),
 }
 impl Error {
     /// Classify transport failures for scripts and tests: timeouts, refused

@@ -28,6 +28,7 @@ fn values(completion: &Completion) -> Vec<&str> {
 fn root_is_hidden_until_typing_or_explicit_shortcut_and_schema_stays_authoritative() {
     assert!(options("", false).suggestions.is_empty());
     assert_eq!(values(&options("ga", false)), ["game"]);
+    assert_eq!(values(&options("up", false)), ["update"]);
     let all = options("", true);
     assert!(values(&all).contains(&"login"));
     assert!(values(&all).contains(&"exit"));
