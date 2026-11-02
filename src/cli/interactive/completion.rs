@@ -421,7 +421,7 @@ fn argument_description(arg: &Arg) -> String {
 }
 fn value_hint(arg: &Arg) -> String {
     match arg.get_id().as_str() {
-        "sort" => "add , for another field (price:asc,validity:asc)".into(),
+        "sort" => "add , for another field (id:asc,price:asc,validity:asc)".into(),
         "category" => "<category> Choose a category".into(),
         "count" => "<count> Positive number, or all".into(),
         "delay" => "<delay> Duration such as 1.5s, 2m, 1h".into(),

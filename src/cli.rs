@@ -257,6 +257,7 @@ fn claimable_ids(response: &Value) -> Result<Vec<u64>> {
 
 #[derive(Clone, Copy, clap::ValueEnum)]
 enum Sort {
+    Id,
     Price,
     Validity,
 }
@@ -264,7 +265,7 @@ enum Sort {
 fn parse_sort(value: &str) -> std::result::Result<(Sort, bool), String> {
     let (field, direction) = value.split_once(':').unwrap_or((value, "asc"));
     let field = <Sort as clap::ValueEnum>::from_str(field, false)
-        .map_err(|_| "Sort field must be price or validity".to_owned())?;
+        .map_err(|_| "Sort field must be id, price or validity".to_owned())?;
     match direction {
         "asc" => Ok((field, false)),
         "desc" => Ok((field, true)),
@@ -1525,6 +1526,7 @@ fn profile_status(code: &str) -> &str {
 
 fn sort_key(plan: &Value, sort: Sort) -> f64 {
     let (value, multiplier) = match sort {
+        Sort::Id => (&plan["id"], 1.0),
         Sort::Price => (&plan["productOfferingPrice"]["price"], 1.0),
         Sort::Validity => (
             &plan["techInfo"]["validity"],

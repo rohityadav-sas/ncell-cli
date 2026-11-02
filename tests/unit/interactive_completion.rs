@@ -89,6 +89,10 @@ fn pending_options_offer_values_and_preserve_equals_form() {
         ["--count=all"]
     );
     assert_eq!(
+        values(&options("plans --sort i", false)),
+        ["id:asc", "id:desc"]
+    );
+    assert_eq!(
         values(&options("plans --sort p", false)),
         ["price:asc", "price:desc"]
     );
@@ -112,7 +116,7 @@ fn sorting_completes_comma_values_and_keeps_the_discovery_hint() {
     );
     assert_eq!(
         result.hint.as_deref(),
-        Some("add , for another field (price:asc,validity:asc)")
+        Some("add , for another field (id:asc,price:asc,validity:asc)")
     );
     assert!(result.sort_hint);
     assert_eq!(

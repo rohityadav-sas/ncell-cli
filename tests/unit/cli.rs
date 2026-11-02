@@ -326,6 +326,7 @@ fn sort_arguments_accept_multiple_keys_and_reject_invalid_values() {
         [(Sort::Validity, true), (Sort::Price, false)]
     ));
     assert!(matches!(parse_sort("price"), Ok((Sort::Price, false))));
+    assert!(matches!(parse_sort("id:desc"), Ok((Sort::Id, true))));
     for value in ["price:up", "name", "price:asc:desc", ""] {
         assert!(Args::try_parse_from(["ncell", "plans", "--sort", value]).is_err());
     }
@@ -333,9 +334,11 @@ fn sort_arguments_accept_multiple_keys_and_reject_invalid_values() {
 
 #[test]
 fn sorting_compares_numeric_prices_and_normalized_durations() {
-    let hourly = json!({"productOfferingPrice":{"price":"35.50"},"techInfo":{"validity":"3","validityUom":"HOUR"}});
-    let daily = json!({"productOfferingPrice":{"price":"100.00"},"techInfo":{"validity":"1","validityUom":"DAY"}});
+    let hourly = json!({"id": 100, "productOfferingPrice":{"price":"35.50"},"techInfo":{"validity":"3","validityUom":"HOUR"}});
+    let daily = json!({"id": "200", "productOfferingPrice":{"price":"100.00"},"techInfo":{"validity":"1","validityUom":"DAY"}});
+    assert!(sort_key(&hourly, Sort::Id) < sort_key(&daily, Sort::Id));
     assert!(sort_key(&hourly, Sort::Price) < sort_key(&daily, Sort::Price));
     assert!(sort_key(&hourly, Sort::Validity) < sort_key(&daily, Sort::Validity));
     assert_eq!(sort_key(&json!({}), Sort::Price), f64::INFINITY);
+    assert_eq!(sort_key(&json!({}), Sort::Id), f64::INFINITY);
 }
