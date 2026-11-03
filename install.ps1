@@ -2,7 +2,7 @@
 #   irm https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.ps1 | iex
 #
 # Optional environment variables:
-#   NCELL_VERSION      release tag to install (default: latest), e.g. v0.5.4
+#   NCELL_VERSION      release tag to install (default: latest), e.g. v0.5.5
 #   NCELL_INSTALL_DIR  install directory (default: %LOCALAPPDATA%\Programs\ncell-cli)
 
 $ErrorActionPreference = 'Stop'

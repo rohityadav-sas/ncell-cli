@@ -3,7 +3,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.sh | sh
 #
 # Optional environment variables:
-#   NCELL_VERSION      release tag to install (default: latest), e.g. v0.5.4
+#   NCELL_VERSION      release tag to install (default: latest), e.g. v0.5.5
 #   NCELL_INSTALL_DIR  install directory (default: $HOME/.local/bin)
 set -eu
 
