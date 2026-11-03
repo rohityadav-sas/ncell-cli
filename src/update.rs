@@ -5,6 +5,9 @@ use zip::ZipArchive;
 pub const GITHUB_LATEST_RELEASE_URL: &str =
     "https://api.github.com/repos/rohityadav-sas/ncell-cli/releases/latest";
 
+/// Maximum allowed executable size inside a release archive (64 MB).
+pub const MAX_BINARY_SIZE: u64 = 64 * 1024 * 1024;
+
 /// Target suffix mapping based on OS and architecture.
 pub fn target_asset_suffix() -> Option<&'static str> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
@@ -23,21 +26,23 @@ pub fn binary_name() -> &'static str {
     if cfg!(windows) { "ncell.exe" } else { "ncell" }
 }
 
+/// Parse semantic version "vX.Y.Z" or "X.Y.Z" into a semver::Version.
+pub fn parse_semver(v: &str) -> Option<semver::Version> {
+    let clean = v.trim().strip_prefix('v').unwrap_or(v.trim());
+    semver::Version::parse(clean).ok()
+}
+
 /// Parse semantic version "vX.Y.Z" or "X.Y.Z" into a comparable tuple.
 pub fn parse_version(v: &str) -> Option<(u64, u64, u64)> {
-    let v = v.trim().strip_prefix('v').unwrap_or(v.trim());
-    let mut parts = v.split('.');
-    let major = parts.next()?.parse().ok()?;
-    let minor = parts.next()?.parse().ok()?;
-    let patch = parts.next()?.parse().ok()?;
-    Some((major, minor, patch))
+    let ver = parse_semver(v)?;
+    Some((ver.major, ver.minor, ver.patch))
 }
 
 /// Compare two versions. Returns true if `target` is newer than `current`.
 pub fn is_newer_version(target: &str, current: &str) -> bool {
-    match (parse_version(target), parse_version(current)) {
+    match (parse_semver(target), parse_semver(current)) {
         (Some(t), Some(c)) => t > c,
-        _ => target.trim().trim_start_matches('v') != current.trim().trim_start_matches('v'),
+        _ => false,
     }
 }
 
@@ -49,9 +54,22 @@ pub fn extract_binary_from_zip(zip_bytes: &[u8], name: &str) -> Result<Vec<u8>> 
     let mut file = archive
         .by_name(name)
         .map_err(|_| Error::Update(format!("Executable '{name}' not found in release archive")))?;
-    let mut buffer = Vec::with_capacity(file.size() as usize);
-    file.read_to_end(&mut buffer)
+    if file.size() > MAX_BINARY_SIZE {
+        return Err(Error::Update(format!(
+            "Executable '{name}' exceeds maximum allowed size ({MAX_BINARY_SIZE} bytes)"
+        )));
+    }
+    let capacity = file.size().min(MAX_BINARY_SIZE) as usize;
+    let mut buffer = Vec::with_capacity(capacity);
+    file.by_ref()
+        .take(MAX_BINARY_SIZE + 1)
+        .read_to_end(&mut buffer)
         .map_err(|e| Error::Update(format!("Failed to read executable from archive: {e}")))?;
+    if buffer.len() as u64 > MAX_BINARY_SIZE {
+        return Err(Error::Update(format!(
+            "Executable '{name}' exceeds maximum allowed size ({MAX_BINARY_SIZE} bytes)"
+        )));
+    }
     Ok(buffer)
 }
 

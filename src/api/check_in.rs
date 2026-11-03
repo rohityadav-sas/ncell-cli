@@ -200,7 +200,7 @@ pub fn already_checked_in(data: &Value) -> bool {
 /// Server-controlled game text, stripped of control characters at the boundary
 /// so no print site can leak terminal escapes into one-shot or error output.
 pub(super) fn clean_message(value: &str) -> String {
-    value.chars().filter(|ch| !ch.is_control()).collect()
+    crate::text::sanitize(value).into_owned()
 }
 
 /// Read a game JSON body together with its HTTP status. Non-JSON error pages

@@ -11,3 +11,5 @@ session.json
 /sync_token.ps1
 
 /docs/version.json
+generate-context.sh
+PROJECT_CONTEXT.md

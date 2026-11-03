@@ -14,37 +14,16 @@ pub(super) fn fetch(web: &reqwest::blocking::Client) -> Result<Value> {
     parse(&html)
 }
 
-fn select(selector: &'static str) -> &'static Selector {
-    static SELECTORS: std::sync::LazyLock<std::collections::HashMap<&'static str, Selector>> =
-        std::sync::LazyLock::new(|| {
-            [
-                ".divide-y > div",
-                ".font-800",
-                ".glass-card",
-                ".justify-between > span:last-child",
-                ".last-week-card",
-                ".rank-hero",
-                ".rank-hero-purple",
-                ".space-y-2 > div",
-                ".sticky p",
-                ".text-right .font-900",
-                ".text-right .leading-none",
-                ".text-white.font-semibold",
-                ".text-xs.text-gray-400",
-                ".truncate",
-                "h1",
-                "span.font-900",
-            ]
-            .into_iter()
-            .map(|s| (s, Selector::parse(s).unwrap()))
-            .collect()
-        });
-    SELECTORS
-        .get(selector)
-        .unwrap_or_else(|| panic!("unknown leaderboard selector: {selector}"))
+macro_rules! sel {
+    ($css:literal) => {{
+        static S: std::sync::LazyLock<scraper::Selector> =
+            std::sync::LazyLock::new(|| scraper::Selector::parse($css).unwrap());
+        &*S
+    }};
 }
-fn text(root: ElementRef<'_>, selector: &'static str) -> String {
-    root.select(select(selector))
+
+fn text(root: ElementRef<'_>, selector: &Selector) -> String {
+    root.select(selector)
         .next()
         .map(|element| {
             element
@@ -56,6 +35,7 @@ fn text(root: ElementRef<'_>, selector: &'static str) -> String {
         })
         .unwrap_or_default()
 }
+
 fn number(text: &str) -> Value {
     text.trim()
         .trim_start_matches('#')
@@ -68,29 +48,64 @@ fn number(text: &str) -> Value {
 fn parse(html: &str) -> Result<Value> {
     let document = Html::parse_document(html);
     let root = document.root_element();
-    if text(root, "h1") != "Leaderboard" {
+    if text(root, sel!("h1")) != "Leaderboard" {
         return Err(Error::InvalidResponse);
     }
-    let performance = root.select(select(".glass-card")).find(|card| card.text().any(|value| value.trim() == "Your Performance"))
+    let performance = root
+        .select(sel!(".glass-card"))
+        .find(|card| card.text().any(|value| value.trim() == "Your Performance"))
         .map(|card| {
-            let stats: Vec<_> = card.select(select(".font-800")).map(|element| number(&element.text().collect::<String>())).collect();
-            json!({"rank": number(&text(card, ".rank-hero")), "points": stats.first(), "tokens": stats.get(1), "streak_days": stats.get(2), "period": text(card, ".justify-between > span:last-child")})
+            let stats: Vec<_> = card
+                .select(sel!(".font-800"))
+                .map(|element| number(&element.text().collect::<String>()))
+                .collect();
+            json!({
+                "rank": number(&text(card, sel!(".rank-hero"))),
+                "points": stats.first(),
+                "tokens": stats.get(1),
+                "streak_days": stats.get(2),
+                "period": text(card, sel!(".justify-between > span:last-child")),
+            })
         });
-    let last_week = root.select(select(".last-week-card")).next().map(|card| json!({
-        "rank": number(&text(card, ".rank-hero-purple")), "points": number(&text(card, ".font-800")),
-        "prize": text(card, ".rank-hero"), "period": text(card, ".justify-between > span:last-child")
-    }));
-    let players: Vec<_> = root.select(select(".space-y-2 > div")).filter_map(|row| {
-        let rank = number(&text(row, "span.font-900"));
-        if rank.is_null() { return None; }
-        Some(json!({"rank": rank, "number": text(row, ".truncate"), "activity": text(row, ".text-xs.text-gray-400"), "points": number(&text(row, ".text-right .font-900"))}))
-    }).collect();
-    let prizes: Vec<_> = root.select(select(".divide-y > div")).map(|row| json!({
-        "ranks": text(row, ".text-white.font-semibold"), "reward": text(row, ".text-right .leading-none")
-    })).collect();
-    Ok(
-        json!({"week": text(root, ".sticky p").split('•').next().unwrap_or("").trim(), "performance": performance, "last_week": last_week, "prizes": prizes, "players": players}),
-    )
+    let last_week = root.select(sel!(".last-week-card")).next().map(|card| {
+        json!({
+            "rank": number(&text(card, sel!(".rank-hero-purple"))),
+            "points": number(&text(card, sel!(".font-800"))),
+            "prize": text(card, sel!(".rank-hero")),
+            "period": text(card, sel!(".justify-between > span:last-child")),
+        })
+    });
+    let players: Vec<_> = root
+        .select(sel!(".space-y-2 > div"))
+        .filter_map(|row| {
+            let rank = number(&text(row, sel!("span.font-900")));
+            if rank.is_null() {
+                return None;
+            }
+            Some(json!({
+                "rank": rank,
+                "number": text(row, sel!(".truncate")),
+                "activity": text(row, sel!(".text-xs.text-gray-400")),
+                "points": number(&text(row, sel!(".text-right .font-900"))),
+            }))
+        })
+        .collect();
+    let prizes: Vec<_> = root
+        .select(sel!(".divide-y > div"))
+        .map(|row| {
+            json!({
+                "ranks": text(row, sel!(".text-white.font-semibold")),
+                "reward": text(row, sel!(".text-right .leading-none")),
+            })
+        })
+        .collect();
+    Ok(json!({
+        "week": text(root, sel!(".sticky p")).split('•').next().unwrap_or("").trim(),
+        "performance": performance,
+        "last_week": last_week,
+        "prizes": prizes,
+        "players": players,
+    }))
 }
 
 #[cfg(test)]

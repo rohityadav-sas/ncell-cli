@@ -1,6 +1,21 @@
 mod cli;
 use clap::Parser;
 fn main() -> std::process::ExitCode {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let is_broken_pipe = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            s.contains("Broken pipe") || s.contains("failed printing to stdout")
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.contains("Broken pipe") || s.contains("failed printing to stdout")
+        } else {
+            false
+        };
+        if is_broken_pipe {
+            std::process::exit(0);
+        }
+        default_hook(info);
+    }));
+
     let args = match cli::Args::try_parse() {
         Ok(args) => args,
         Err(error) if error.kind() == clap::error::ErrorKind::DisplayHelp => {

@@ -5,7 +5,14 @@ fn scratch() -> std::path::PathBuf {
 }
 
 fn account(number: &str) -> Account {
-    serde_json::from_value(serde_json::json!({"msisdn":number,"access_token":format!("access-{number}"),"refresh_token":format!("refresh-{number}"),"authenticated_at":"2026-10-12T00:00:00Z"})).unwrap()
+    serde_json::from_value(serde_json::json!({
+        "msisdn": number,
+        "device_id": format!("device-{number}"),
+        "access_token": format!("access-{number}"),
+        "refresh_token": format!("refresh-{number}"),
+        "authenticated_at": "2026-10-12T00:00:00Z"
+    }))
+    .unwrap()
 }
 
 #[test]
@@ -13,15 +20,12 @@ fn file_store_round_trip() {
     let dir = scratch();
     let store = FileStore::in_dir(&dir).unwrap();
     assert!(store.load().unwrap().is_none());
-    store
-        .save(&Session {
-            device_id: "test-device".into(),
-            ..Session::default()
-        })
-        .unwrap();
-    let loaded = store.load();
+    let mut session = Session::default();
+    session.set_account(account("9811111111"));
+    store.save(&session).unwrap();
+    let loaded = store.load().unwrap().unwrap();
     store.clear().unwrap();
-    assert_eq!(loaded.unwrap().unwrap().device_id, "test-device");
+    assert_eq!(loaded.active().unwrap().device_id, "device-9811111111");
     assert!(store.load().unwrap().is_none());
     assert!(!dir.join("session.json").exists());
     std::fs::remove_dir_all(&dir).ok();
@@ -31,21 +35,17 @@ fn file_store_round_trip() {
 fn multiple_accounts_round_trip() {
     let dir = scratch();
     let store = FileStore::in_dir(&dir).unwrap();
-    let mut session = Session {
-        device_id: "device".into(),
-        ..Session::default()
-    };
+    let mut session = Session::default();
     for number in ["9811111111", "9822222222"] {
         session.set_account(account(number));
     }
     store.save(&session).unwrap();
     let mut loaded = store.load().unwrap().unwrap();
-    assert_eq!(loaded.other_accounts.len(), 1);
+    assert_eq!(loaded.accounts.len(), 2);
     loaded.switch("9811111111").unwrap();
     store.save(&loaded).unwrap();
     let loaded = store.load().unwrap().unwrap();
-    assert_eq!(loaded.account.unwrap().msisdn, "9811111111");
-    assert_eq!(loaded.other_accounts[0].account.msisdn, "9822222222");
+    assert_eq!(loaded.active().unwrap().msisdn, "9811111111");
     store.clear().unwrap();
     assert!(store.load().unwrap().is_none());
     std::fs::remove_dir_all(&dir).ok();
@@ -62,6 +62,7 @@ fn legacy_shaped_session_loads_and_three_account_logout_cleans_session_file() {
     .unwrap();
     let store = FileStore::in_dir(&dir).unwrap();
     let mut session = store.load().unwrap().unwrap();
+    assert_eq!(session.active().unwrap().device_id, "legacy-device");
     for number in ["9822222222", "9833333333"] {
         session.set_account(account(number));
     }
@@ -71,7 +72,7 @@ fn legacy_shaped_session_loads_and_three_account_logout_cleans_session_file() {
         loaded.switch(number).unwrap();
         store.save(&loaded).unwrap();
         assert_eq!(
-            store.load().unwrap().unwrap().account.unwrap().msisdn,
+            store.load().unwrap().unwrap().active().unwrap().msisdn,
             number
         );
     }
@@ -80,10 +81,7 @@ fn legacy_shaped_session_loads_and_three_account_logout_cleans_session_file() {
         loaded.logout();
         store.save(&loaded).unwrap();
         let loaded = store.load().unwrap().unwrap();
-        assert_eq!(
-            loaded.other_accounts.len() + usize::from(loaded.account.is_some()),
-            remaining
-        );
+        assert_eq!(loaded.accounts.len(), remaining);
     }
     store.clear().unwrap();
     assert!(!dir.join("session.json").exists());
@@ -94,18 +92,15 @@ fn legacy_shaped_session_loads_and_three_account_logout_cleans_session_file() {
 fn add_remove_without_active_account_round_trips() {
     let dir = scratch();
     let store = FileStore::in_dir(&dir).unwrap();
-    let mut session = Session {
-        device_id: "device".into(),
-        ..Session::default()
-    };
+    let mut session = Session::default();
     session.add_account(account("9811111111"));
     store.save(&session).unwrap();
     let mut loaded = store.load().unwrap().unwrap();
-    assert!(loaded.account.is_none());
-    assert_eq!(loaded.other_accounts.len(), 1);
+    assert!(loaded.active().is_none());
+    assert_eq!(loaded.accounts.len(), 1);
     loaded.remove("9811111111").unwrap();
     store.save(&loaded).unwrap();
-    assert!(store.load().unwrap().unwrap().other_accounts.is_empty());
+    assert!(store.load().unwrap().unwrap().accounts.is_empty());
     store.clear().unwrap();
     assert!(!dir.join("session.json").exists());
     std::fs::remove_dir_all(&dir).ok();

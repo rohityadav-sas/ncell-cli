@@ -24,15 +24,23 @@ impl<S: SessionStore> AuthService<S> {
         Self { api, store }
     }
 
-    /// Retry once after an explicit expired-access-token rejection.
+    /// Retry once after an explicit expired-access-token rejection, or proactively
+    /// refresh if the stored token is already known to be expired.
     pub fn authenticated<T>(
         &self,
         request: impl Fn(&Client, &Account, &str) -> Result<T>,
     ) -> Result<T> {
+        if let Ok(Some(session)) = self.store.load()
+            && let Some(account) = session.active()
+            && account.is_expired()
+            && account.refresh_token.is_some()
+        {
+            let _ = self.refresh();
+        }
         let execute = || {
             let session = self.store.load()?.ok_or(Error::NotLoggedIn)?;
-            let account = session.account.as_ref().ok_or(Error::NotLoggedIn)?;
-            request(&self.api, account, &session.device_id)
+            let account = session.active().ok_or(Error::NotLoggedIn)?;
+            request(&self.api, account, &account.device_id)
         };
         match execute() {
             Err(Error::Api {
@@ -48,13 +56,26 @@ impl<S: SessionStore> AuthService<S> {
     pub fn request_otp(&self, number: &str) -> Result<()> {
         let number = normalize_number(number)?;
         let mut session = self.store.load()?.unwrap_or_default();
-        if session.device_id.is_empty() {
-            session.device_id = uuid::Uuid::new_v4().simple().to_string()[..16].into();
-        }
-        // Persist identity before sending SMS so cancellation never loses the device binding.
-        session.pending_msisdn = Some(number.into());
+        let device_id = session
+            .accounts
+            .iter()
+            .find(|a| a.msisdn == number)
+            .map(|a| a.device_id.clone())
+            .or_else(|| {
+                session
+                    .pending
+                    .as_ref()
+                    .filter(|p| p.msisdn == number)
+                    .map(|p| p.device_id.clone())
+            })
+            .unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string()[..16].into());
+
+        session.pending = Some(crate::session::PendingLogin {
+            msisdn: number.into(),
+            device_id: device_id.clone(),
+        });
         self.store.save(&session)?;
-        self.api.generate_otp(number, &session.device_id)
+        self.api.generate_otp(number, &device_id)
     }
 
     pub fn verify_otp(&self, number: &str, otp: &str) -> Result<()> {
@@ -67,38 +88,46 @@ impl<S: SessionStore> AuthService<S> {
             return Err(Error::InvalidInput("OTP must contain 4 to 8 digits"));
         }
         let mut session = self.store.load()?.ok_or(Error::NoPendingLogin)?;
-        if session.pending_msisdn.as_deref() != Some(number) || session.device_id.is_empty() {
+        let pending = session.pending.take().ok_or(Error::NoPendingLogin)?;
+        if pending.msisdn != number || pending.device_id.is_empty() {
             return Err(Error::NoPendingLogin);
         }
-        let tokens = self.api.validate_otp(number, &session.device_id, otp)?;
+        let tokens = self.api.validate_otp(number, &pending.device_id, otp)?;
         let now = chrono::Utc::now();
         let account = Account {
             msisdn: number.into(),
+            device_id: pending.device_id,
             access_token: tokens.access_token,
             refresh_token: tokens.refresh_token,
             authenticated_at: now,
             token_saved_at: Some(now),
             access_token_expires_at: token_expiry(tokens.expires_in),
         };
-        if activate {
-            session.set_account(account);
-        } else {
-            session.add_account(account);
-        }
+        session.save_account(account, activate);
         self.store.save(&session)
     }
 
     pub fn refresh(&self) -> Result<()> {
         let mut session = self.store.load()?.ok_or(Error::NotLoggedIn)?;
-        let account = session.account.as_mut().ok_or(Error::NotLoggedIn)?;
+        let account = session.active_mut().ok_or(Error::NotLoggedIn)?;
         let refresh_token = account
             .refresh_token
             .as_deref()
             .filter(|token| !token.is_empty())
             .ok_or(Error::InvalidInput("No refresh token saved. Log in again"))?;
-        let tokens = self
+        let tokens = match self
             .api
-            .refresh(&account.msisdn, &session.device_id, refresh_token)?;
+            .refresh(&account.msisdn, &account.device_id, refresh_token)
+        {
+            Err(Error::Api {
+                status: 401, code, ..
+            }) if code == "LGN2004" => {
+                return Err(Error::InvalidInput(
+                    "Session expired. Run `ncell login` to sign in again.",
+                ));
+            }
+            res => res?,
+        };
         account.token_saved_at = Some(chrono::Utc::now());
         account.access_token_expires_at = token_expiry(tokens.expires_in);
         account.access_token = tokens.access_token;

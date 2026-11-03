@@ -9,7 +9,7 @@ homepage = "https://rohityadav-sas.github.io/ncell-cli/"
 readme = "README.md"
 keywords = ["ncell", "cli", "nepal", "sms"]
 categories = ["command-line-utilities"]
-include = ["src/**", "tests/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE"]
+include = ["src/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE"]
 
 [[bin]]
 name = "ncell"
@@ -25,6 +25,7 @@ fasteval = "0.2"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "cookies", "json", "multipart", "rustls-tls"] }
 scraper = { version = "0.24", default-features = false }
 self-replace = "1.5.1"
+semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
@@ -34,4 +35,11 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 mockito = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
 

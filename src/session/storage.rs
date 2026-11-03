@@ -14,7 +14,7 @@ pub trait SessionStore {
 
 pub struct FileStore {
     path: PathBuf,
-    _lock: fs::File,
+    lock_path: PathBuf,
 }
 
 fn session_dir() -> Option<PathBuf> {
@@ -45,23 +45,34 @@ impl FileStore {
         std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
         builder.create(dir).map_err(|_| Error::Storage)?;
 
-        // Lock lives next to the data, not in the shared temp dir.
+        Ok(Self {
+            path: dir.join("session.json"),
+            lock_path: dir.join("session.lock"),
+        })
+    }
+
+    fn acquire_lock(&self) -> Result<fs::File> {
         let lock = fs::OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .truncate(false)
-            .open(dir.join("session.lock"))
+            .open(&self.lock_path)
             .map_err(|_| Error::Storage)?;
-        lock.try_lock().map_err(|e| match e {
-            fs::TryLockError::WouldBlock => Error::SessionBusy,
-            fs::TryLockError::Error(_) => Error::Storage,
-        })?;
-
-        Ok(Self {
-            path: dir.join("session.json"),
-            _lock: lock,
-        })
+        for _ in 0..10 {
+            match lock.try_lock() {
+                Ok(()) => return Ok(lock),
+                Err(fs::TryLockError::WouldBlock) => {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(fs::TryLockError::Error(_)) => return Err(Error::Storage),
+            }
+        }
+        match lock.try_lock() {
+            Ok(()) => Ok(lock),
+            Err(fs::TryLockError::WouldBlock) => Err(Error::SessionBusy),
+            Err(fs::TryLockError::Error(_)) => Err(Error::Storage),
+        }
     }
 }
 
@@ -77,6 +88,7 @@ impl SessionStore for FileStore {
     }
 
     fn save(&self, session: &Session) -> Result<()> {
+        let _lock = self.acquire_lock()?;
         let bytes = serde_json::to_vec_pretty(session).map_err(|_| Error::InvalidSession)?;
         let tmp = self.path.with_extension("json.tmp");
         let _ = fs::remove_file(&tmp); // stale leftover from a crash
@@ -98,6 +110,7 @@ impl SessionStore for FileStore {
     }
 
     fn clear(&self) -> Result<()> {
+        let _lock = self.acquire_lock()?;
         match fs::remove_file(&self.path) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),

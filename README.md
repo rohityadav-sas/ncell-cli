@@ -123,6 +123,6 @@ Download the ZIP archive for your platform from [Releases](<https://github.com/r
 chmod +x ncell
 ./ncell --help
 ```
-Linux credential storage requires an unlocked Secret Service provider, such as GNOME Keyring or KWallet with Secret Service enabled.
+Session credentials are saved locally under `~/.config/ncell-cli/session.json` (`%LOCALAPPDATA%\ncell-cli\session.json` on Windows) with user-only permissions (0600).
 
 3. (Optional) Add the directory containing the executable to your `PATH` to run `ncell` from anywhere.

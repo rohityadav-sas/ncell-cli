@@ -312,13 +312,13 @@ impl Runtime {
     fn game(&mut self) -> Result<&mut ncell_cli::api::GameSession> {
         let client = self.client()?;
         let session = FileStore::new()?.load()?.ok_or(Error::NotLoggedIn)?;
-        let account = session.account.as_ref().ok_or(Error::NotLoggedIn)?;
+        let account = session.account().ok_or(Error::NotLoggedIn)?;
         // Cache key carries no secrets: rotation changes the save time,
         // which is enough to invalidate the cached game session.
         let identity = format!(
             "{}:{}:{}",
             account.msisdn,
-            session.device_id,
+            account.device_id,
             account
                 .token_saved_at
                 .map(|saved| saved.to_rfc3339())
@@ -408,7 +408,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                             let remaining = balance.ok_or(Error::InvalidInput(
                                 "Game page did not provide the token balance",
                             ))?;
-                            let total = index.saturating_add(remaining / cost);
+                            let total = affordable_games(index, remaining, cost);
                             if total == index {
                                 output(
                                     args.json,
@@ -438,7 +438,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                                 let progress = AnsiColor::Cyan.on_default().bold();
                                 let label = format!("Game {} of {total}", index + 1);
                                 anstream::println!("{progress}{label}{progress:#}\n");
-                                io::stdout().flush().map_err(|_| Error::InvalidResponse)?;
+                                flush_stdout()?;
                             }
                         }
                         if math {
@@ -497,7 +497,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                             game.tokens = balance;
                             let (won, message) = math_summary(&response);
                             output(args.json, response, message);
-                            io::stdout().flush().map_err(|_| Error::InvalidResponse)?;
+                            flush_stdout()?;
                             if !won {
                                 return Err(Error::GameLost);
                             }
@@ -531,7 +531,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                             response["new_week_points"]
                         );
                         output(args.json, response, message);
-                        io::stdout().flush().map_err(|_| Error::InvalidResponse)?;
+                        flush_stdout()?;
                     }
                     return Ok(());
                 }
@@ -641,26 +641,19 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
             // Look up the plan first so the prompt can show its real name and price.
             // The interactive shell already holds the plan the user picked and
             // passes it along; anything missing or mismatched falls back to a lookup.
-            let plan = match hinted_plan(&id) {
-                Some(plan) => plan,
-                None => authenticated(runtime.client()?, |client, account, _| {
-                    let catalog = client.search_plans(
-                        &account.msisdn,
-                        &account.access_token,
-                        category,
-                        "",
-                    )?;
-                    catalog["availablePackages"]
-                        .as_array()
-                        .ok_or(Error::InvalidResponse)?
-                        .iter()
-                        .find(|p| plan_id_matches(&p["id"], &id))
-                        .cloned()
-                        .ok_or(Error::InvalidInput(
-                            "Plan not found in this category. Run plans --category <ID>",
-                        ))
-                })?,
-            };
+            let plan = authenticated(runtime.client()?, |client, account, _| {
+                let catalog =
+                    client.search_plans(&account.msisdn, &account.access_token, category, "")?;
+                catalog["availablePackages"]
+                    .as_array()
+                    .ok_or(Error::InvalidResponse)?
+                    .iter()
+                    .find(|p| plan_id_matches(&p["id"], &id))
+                    .cloned()
+                    .ok_or(Error::InvalidInput(
+                        "Plan not found in this category. Run plans --category <ID>",
+                    ))
+            })?;
             let name = text(&plan["displayInfo"]["displayName"]).trim().to_owned();
             let price = plan_price(&plan);
             if dry_run {
@@ -715,21 +708,15 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                     store.save(&session)?;
                     output(
                         args.json,
-                        json!({"removed_account":number,"active_account":session.account.as_ref().map(|a| &a.msisdn)}),
+                        json!({"removed_account":number,"active_account":session.active}),
                         format!("Removed {number}."),
                     );
                 }
                 AccountCommand::List => {
                     let accounts: Vec<_> = session
-                        .account
+                        .accounts
                         .iter()
-                        .map(|a| json!({"number":a.msisdn,"active":true}))
-                        .chain(
-                            session
-                                .other_accounts
-                                .iter()
-                                .map(|saved| json!({"number":saved.account.msisdn,"active":false})),
-                        )
+                        .map(|a| json!({"number": a.msisdn, "active": Some(&a.msisdn) == session.active.as_ref()}))
                         .collect();
                     if args.json {
                         output(true, json!(accounts), "");
@@ -764,7 +751,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
             }
         }
         Command::Status => {
-            let account = FileStore::new()?.load()?.and_then(|s| s.account);
+            let account = FileStore::new()?.load()?.and_then(|s| s.account().cloned());
             match account {
                 Some(a) => output(
                     args.json,
@@ -803,7 +790,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
             store.save(&session)?;
             output(
                 args.json,
-                json!({"account_removed": true, "active_account": session.account.as_ref().map(|a| &a.msisdn)}),
+                json!({"account_removed": true, "active_account": session.active}),
                 "Active account removed. Run ncell account list to see remaining accounts.",
             );
         }
@@ -825,20 +812,20 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                 Command::Plans { options, .. } => (Some(options), ""),
                 _ => (None, ""),
             };
+            if matches!(
+                &command,
+                Command::Plans {
+                    action: Some(PlanCommand::Search { .. }),
+                    ..
+                }
+            ) && keyword.trim().is_empty()
+            {
+                return Err(Error::InvalidInput("Search text cannot be empty"));
+            }
             let (mut data, number) = authenticated(runtime.client()?, |client, account, _| {
                 let data = if list_categories {
                     client.categories(&account.msisdn, &account.access_token)?
                 } else if plans {
-                    if matches!(
-                        &command,
-                        Command::Plans {
-                            action: Some(PlanCommand::Search { .. }),
-                            ..
-                        }
-                    ) && keyword.trim().is_empty()
-                    {
-                        return Err(Error::InvalidInput("Search text cannot be empty"));
-                    }
                     client.search_plans(
                         &account.msisdn,
                         &account.access_token,
@@ -951,29 +938,20 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
 
 /// Open a URL in the default browser without waiting for it to close.
 fn open_docs(url: &str) -> Result<()> {
-    #[cfg(target_os = "windows")]
-    let command = std::process::Command::new("rundll32.exe")
-        .arg("url.dll,FileProtocolHandler")
+    let (prog, pre): (&str, &[&str]) = if cfg!(windows) {
+        ("rundll32.exe", &["url.dll,FileProtocolHandler"])
+    } else if cfg!(target_os = "macos") {
+        ("open", &[])
+    } else {
+        ("xdg-open", &[])
+    };
+    std::process::Command::new(prog)
+        .args(pre)
         .arg(url)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
-        .spawn();
-    #[cfg(target_os = "macos")]
-    let command = std::process::Command::new("open")
-        .arg(url)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn();
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    let command = std::process::Command::new("xdg-open")
-        .arg(url)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn();
-    command
+        .spawn()
         .map_err(|_| Error::Script(format!("Could not open a browser. Documentation: {url}")))?;
     Ok(())
 }
@@ -982,23 +960,6 @@ fn open_docs(url: &str) -> Result<()> {
 fn plan_id_matches(value: &Value, id: &str) -> bool {
     value.as_str().is_some_and(|found| found == id)
         || value.as_u64().is_some_and(|found| found.to_string() == id)
-}
-
-/// Accept a plan handed over by the interactive shell only if it was fetched
-/// for the same account and is the plan being subscribed to.
-fn plan_from_hint(raw: &str, msisdn: &str, id: &str) -> Option<Value> {
-    let hint: Value = serde_json::from_str(raw).ok()?;
-    (hint["msisdn"] == msisdn && plan_id_matches(&hint["plan"]["id"], id))
-        .then(|| hint["plan"].clone())
-}
-
-/// Read NCELL_PLAN_HINT and check it against the saved session on disk (no
-/// network). The store is dropped before returning so the later authenticated
-/// request can take the session lock.
-fn hinted_plan(id: &str) -> Option<Value> {
-    let raw = std::env::var("NCELL_PLAN_HINT").ok()?;
-    let account = FileStore::new().ok()?.load().ok()??.account?;
-    plan_from_hint(&raw, &account.msisdn, id)
 }
 
 /// Human price for a plan pack, shared by the list and the buy prompt.
@@ -1411,22 +1372,31 @@ fn task_failed(response: &Value) -> bool {
 /// so pasted control characters or escape sequences from API responses
 /// can never inject terminal commands into one-shot output.
 fn clean(value: &str) -> std::borrow::Cow<'_, str> {
-    if value.chars().any(|ch| ch.is_control()) {
-        value
-            .chars()
-            .filter(|ch| !ch.is_control())
-            .collect::<String>()
-            .into()
-    } else {
-        std::borrow::Cow::Borrowed(value)
-    }
+    ncell_cli::text::sanitize(value)
 }
 
 fn text(value: &Value) -> std::borrow::Cow<'_, str> {
     match value.as_str() {
-        Some(raw) => clean(raw),
+        Some(raw) => ncell_cli::text::sanitize(raw),
         None => std::borrow::Cow::Borrowed(""),
     }
+}
+
+pub(crate) fn affordable_games(played: u64, balance: u64, cost: u64) -> u64 {
+    if cost == 0 {
+        return played;
+    }
+    played.saturating_add(balance / cost)
+}
+
+fn flush_stdout() -> Result<()> {
+    if let Err(e) = io::stdout().flush() {
+        if e.kind() == io::ErrorKind::BrokenPipe {
+            std::process::exit(0);
+        }
+        return Err(Error::Prompt);
+    }
+    Ok(())
 }
 
 fn wait_between_games(delay: Duration, show_timer: bool) -> Result<()> {
@@ -1445,14 +1415,12 @@ fn wait_between_games(delay: Duration, show_timer: bool) -> Result<()> {
         if remaining.is_zero() {
             break;
         }
-        if visible {
-            write!(stderr, "\rNext game in {:>10.1}s", remaining.as_secs_f64())
-                .and_then(|_| stderr.flush())
-                .map_err(|_| Error::InvalidInput("Could not display game countdown"))?;
-        }
+        write!(stderr, "\rNext game in {:>10.1}s", remaining.as_secs_f64())
+            .and_then(|_| stderr.flush())
+            .map_err(|_| Error::InvalidInput("Could not display game countdown"))?;
         std::thread::sleep(remaining.min(Duration::from_millis(100)));
     }
-    if visible && !delay.is_zero() {
+    if !delay.is_zero() {
         write!(stderr, "\r{:58}\r", "")
             .and_then(|_| stderr.flush())
             .map_err(|_| Error::InvalidInput("Could not clear game countdown"))?;
@@ -1561,28 +1529,9 @@ fn sort_key(plan: &Value, sort: Sort) -> f64 {
 mod tests;
 
 #[cfg(test)]
-mod plan_hint_tests {
-    use super::{plan_from_hint, plan_id_matches};
+mod plan_id_tests {
+    use super::plan_id_matches;
     use serde_json::json;
-
-    fn hint(id: serde_json::Value) -> String {
-        json!({"msisdn": "9812345678", "plan": {"id": id, "ncellName": "Pack"}}).to_string()
-    }
-
-    #[test]
-    fn accepts_matching_account_and_id() {
-        let plan = plan_from_hint(&hint(json!("42")), "9812345678", "42").unwrap();
-        assert_eq!(plan["ncellName"], "Pack");
-        assert!(plan_from_hint(&hint(json!(42)), "9812345678", "42").is_some());
-    }
-
-    #[test]
-    fn rejects_other_account_other_id_and_garbage() {
-        assert!(plan_from_hint(&hint(json!("42")), "9800000000", "42").is_none());
-        assert!(plan_from_hint(&hint(json!("42")), "9812345678", "43").is_none());
-        assert!(plan_from_hint("not json", "9812345678", "42").is_none());
-        assert!(plan_from_hint("{}", "9812345678", "42").is_none());
-    }
 
     #[test]
     fn id_matching_handles_strings_numbers_and_junk() {

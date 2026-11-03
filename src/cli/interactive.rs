@@ -21,10 +21,8 @@ use ncell_cli::{
     error::{Error, Result},
     session::{FileStore, SessionStore},
 };
-use serde_json::{Value, json};
 use std::{
     cell::Cell,
-    collections::HashMap,
     io::{self, IsTerminal, Write},
     process::Stdio,
     sync::{
@@ -47,11 +45,11 @@ const PACK_TTL: Duration = Duration::from_secs(300);
 
 fn paint(color: &str, value: &str) -> String {
     // Terminal control sequences must never come from API text, paths or pasted input.
-    let text: String = value.chars().filter(|ch| !ch.is_control()).collect();
+    let text = ncell_cli::text::sanitize(value);
     if colors_enabled() {
         format!("\x1b[38;2;{color}m{text}\x1b[0m")
     } else {
-        text
+        text.into_owned()
     }
 }
 fn colors_enabled() -> bool {
@@ -74,7 +72,7 @@ fn clipped(value: &str, available: usize) -> String {
     let mut used = 0;
     value
         .chars()
-        .filter(|ch| !ch.is_control())
+        .filter(|ch| !ncell_cli::text::is_unsafe_char(*ch))
         .take_while(|ch| {
             used += ch.width().unwrap_or(0);
             used <= available
@@ -261,12 +259,9 @@ impl Drop for TerminalGuard {
     }
 }
 
-/// What a background load produced. `plans` and `msisdn` are only filled in
-/// pack mode: the full plan objects, and the account they were fetched for.
+/// What a background load produced.
 struct Loaded {
     values: Vec<Suggestion>,
-    plans: HashMap<(u64, String), Value>,
-    msisdn: String,
 }
 
 enum CacheEvent {
@@ -277,8 +272,6 @@ enum CacheEvent {
 #[derive(Default)]
 struct CategoryCache {
     values: Vec<Suggestion>,
-    plans: HashMap<(u64, String), Value>,
-    msisdn: String,
     loaded: Option<Instant>,
     pending: Option<mpsc::Receiver<CacheEvent>>,
     progress: Option<(usize, usize)>,
@@ -317,8 +310,6 @@ impl CategoryCache {
             match result {
                 Ok(loaded) => {
                     self.values = loaded.values;
-                    self.plans = loaded.plans;
-                    self.msisdn = loaded.msisdn;
                     self.loaded = Some(Instant::now());
                 }
                 Err(error) => self.error = Some(error),
@@ -338,24 +329,12 @@ impl CategoryCache {
             loaded.elapsed() < if pack_mode { PACK_TTL } else { CATEGORY_TTL }
         })
     }
-    /// The selected plan as a JSON envelope for the `plans subscribe` child, so
-    /// it can skip re-fetching the catalog. Only fresh data is ever handed over;
-    /// the child still verifies the account before using it.
-    fn plan_hint(&self, id: &str, category: u64) -> Option<String> {
-        if !self.fresh(true) {
-            return None;
-        }
-        let plan = self.plans.get(&(category, id.to_owned()))?;
-        Some(json!({"msisdn": self.msisdn, "plan": plan}).to_string())
-    }
     fn load(&mut self, runtime: &mut Runtime, pack_mode: bool) -> bool {
         if self.pending.is_some() || self.error.is_some() || self.fresh(pack_mode) {
             return false;
         }
         self.loaded = None;
         self.values.clear();
-        self.plans.clear();
-        self.msisdn.clear();
         let client = match runtime.client() {
             Ok(client) => client,
             Err(error) => {
@@ -375,7 +354,7 @@ impl CategoryCache {
                 let account = store
                     .load()
                     .map_err(|error| error.to_string())?
-                    .and_then(|session| session.account)
+                    .and_then(|session| session.account().cloned())
                     .ok_or_else(|| Error::NotLoggedIn.to_string())?;
                 Ok((account.msisdn, account.access_token))
             };
@@ -439,18 +418,9 @@ impl CategoryCache {
                             })
                             .collect::<std::result::Result<Vec<_>, String>>()
                     })?;
-                    let plans = completion::plan_index(&fetched);
-                    completion::merge_fetched_packs(fetched).map(|values| Loaded {
-                        values,
-                        plans,
-                        msisdn,
-                    })
+                    completion::merge_fetched_packs(fetched).map(|values| Loaded { values })
                 } else {
-                    completion::categories(&response).map(|values| Loaded {
-                        values,
-                        plans: HashMap::new(),
-                        msisdn: String::new(),
-                    })
+                    completion::categories(&response).map(|values| Loaded { values })
                 }
             })();
             let _ = sender.send(CacheEvent::Finished(result));
@@ -667,23 +637,14 @@ fn draw_output(transcript: &Transcript) -> io::Result<()> {
 /// Run one command as a child process and stream its output into the transcript.
 /// Returns whether the child exited successfully, so the caller only discards
 /// cached data when state may actually have changed.
-fn run_captured(
-    words: &[String],
-    plan_hint: Option<&str>,
-    transcript: &mut Transcript,
-) -> io::Result<bool> {
+fn run_captured(words: &[String], transcript: &mut Transcript) -> io::Result<bool> {
     let mut command = std::process::Command::new(std::env::current_exe()?);
     command
         .args(words)
         .stdin(Stdio::inherit())
         .env("NCELL_CAPTURED", "1")
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        // Never inherit a stale hint from the user's own environment.
-        .env_remove("NCELL_PLAN_HINT");
-    if let Some(hint) = plan_hint {
-        command.env("NCELL_PLAN_HINT", hint);
-    }
+        .stderr(Stdio::piped());
     if colors_enabled() {
         command.env("CLICOLOR_FORCE", "1");
     }
@@ -1594,7 +1555,7 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
                 let text = text
                     .chars()
                     .map(|ch| if ch.is_whitespace() { ' ' } else { ch })
-                    .filter(|ch| !ch.is_control())
+                    .filter(|ch| !ncell_cli::text::is_unsafe_char(*ch))
                     .collect::<String>();
                 editor.insert(&text);
                 Action::Continue
@@ -1646,21 +1607,8 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
                     })
                 );
                 guard.pause().map_err(fail)?;
-                // `plans subscribe` only needs the one plan the user just picked
-                // from the pack dropdown, so hand it over instead of re-fetching.
-                let plan_hint = match &args.command {
-                    Some(Command::Plans {
-                        action: Some(super::PlanCommand::Subscribe { id, category, .. }),
-                        ..
-                    }) => packs.plan_hint(id, *category),
-                    _ => None,
-                };
-                // A cancelled or failed command changes nothing, so keep the
-                // caches: without this every cancelled subscribe refetches all
-                // 18 pack categories on the next Ctrl+Space. Scripts always
-                // invalidate since a half-finished script may have subscribed.
                 let scripted = matches!(&args.command, Some(Command::Script { .. }));
-                let succeeded = match run_captured(&words, plan_hint.as_deref(), &mut transcript) {
+                let succeeded = match run_captured(&words, &mut transcript) {
                     Err(error) => {
                         transcript.push_str(&format!("Error: {error}\n"));
                         false

@@ -10,20 +10,17 @@ use std::{cell::RefCell, rc::Rc};
 
 fn saved_account() -> MemoryStore {
     let store = MemoryStore::default();
-    store
-        .save(&Session {
-            device_id: "same-device".into(),
-            account: Some(ncell_cli::session::Account {
-                msisdn: "9812345678".into(),
-                access_token: "old-access".into(),
-                refresh_token: Some("old-refresh".into()),
-                authenticated_at: chrono::Utc::now(),
-                token_saved_at: None,
-                access_token_expires_at: None,
-            }),
-            ..Session::default()
-        })
-        .unwrap();
+    let mut session = Session::default();
+    session.set_account(ncell_cli::session::Account {
+        msisdn: "9812345678".into(),
+        device_id: "same-device".into(),
+        access_token: "old-access".into(),
+        refresh_token: Some("old-refresh".into()),
+        authenticated_at: chrono::Utc::now(),
+        token_saved_at: None,
+        access_token_expires_at: None,
+    });
+    store.save(&session).unwrap();
     store
 }
 
@@ -54,7 +51,13 @@ fn automatic_refresh_saves_rotated_tokens_and_retries_once() {
         .authenticated(|client, account, _| {
             // The retry must see tokens already persisted in the store.
             assert_eq!(
-                store.load().unwrap().unwrap().account.unwrap().access_token,
+                store
+                    .load()
+                    .unwrap()
+                    .unwrap()
+                    .active()
+                    .unwrap()
+                    .access_token,
                 account.access_token
             );
             client.balance(&account.msisdn, &account.access_token)
@@ -66,7 +69,7 @@ fn automatic_refresh_saves_rotated_tokens_and_retries_once() {
             .load()
             .unwrap()
             .unwrap()
-            .account
+            .active()
             .unwrap()
             .refresh_token
             .as_deref(),
@@ -177,7 +180,7 @@ fn login_uses_nested_otp_and_persists_tokens_with_same_device() {
     let store = MemoryStore::default();
     let auth = AuthService::new(Client::with_base_url(&server.url()).unwrap(), store.clone());
     auth.request_otp("+9779812345678").unwrap();
-    let device = store.load().unwrap().unwrap().device_id;
+    let device = store.load().unwrap().unwrap().pending.unwrap().device_id;
     assert_eq!(device.len(), 16);
     let validate = server.mock("POST", "/v1.0/user/otp/validate")
         .match_request(|request| {
@@ -189,9 +192,9 @@ fn login_uses_nested_otp_and_persists_tokens_with_same_device() {
         .expect(1).create();
     auth.verify_otp("9812345678", "001234").unwrap();
     let session = store.load().unwrap().unwrap();
-    assert_eq!(session.device_id, device);
-    assert!(session.pending_msisdn.is_none());
-    let account = session.account.unwrap();
+    assert_eq!(session.active().unwrap().device_id, device);
+    assert!(session.pending.is_none());
+    let account = session.active().unwrap();
     assert_eq!(account.access_token, "test-access");
     assert_eq!(account.refresh_token.as_deref(), Some("test-refresh"));
     generate.assert();
@@ -231,8 +234,11 @@ fn business_rejection_on_http_200_preserves_pending_session() {
         Err(Error::Api { .. })
     ));
     let session = store.load().unwrap().unwrap();
-    assert!(session.account.is_none());
-    assert_eq!(session.pending_msisdn.as_deref(), Some("9812345678"));
+    assert!(session.active().is_none());
+    assert_eq!(
+        session.pending.as_ref().map(|p| p.msisdn.as_str()),
+        Some("9812345678")
+    );
     generate.assert();
     validate.assert();
 }
@@ -247,25 +253,31 @@ fn failed_validation_does_not_overwrite_existing_account() {
         .expect(1)
         .create();
     let store = MemoryStore::default();
-    store
-        .save(&Session {
-            device_id: "0123456789abcdef".into(),
-            other_accounts: Vec::new(),
-            pending_msisdn: Some("9812345678".into()),
-            account: Some(ncell_cli::session::Account {
-                msisdn: "9823456789".into(),
-                access_token: "old-access".into(),
-                refresh_token: None,
-                authenticated_at: chrono::Utc::now(),
-                token_saved_at: None,
-                access_token_expires_at: None,
-            }),
-        })
-        .unwrap();
+    let mut session = Session::default();
+    session.set_account(ncell_cli::session::Account {
+        msisdn: "9823456789".into(),
+        device_id: "0123456789abcdef".into(),
+        access_token: "old-access".into(),
+        refresh_token: None,
+        authenticated_at: chrono::Utc::now(),
+        token_saved_at: None,
+        access_token_expires_at: None,
+    });
+    session.pending = Some(ncell_cli::session::PendingLogin {
+        msisdn: "9812345678".into(),
+        device_id: "0123456789abcdef".into(),
+    });
+    store.save(&session).unwrap();
     let auth = AuthService::new(Client::with_base_url(&server.url()).unwrap(), store.clone());
     assert!(auth.verify_otp("9812345678", "123456").is_err());
     assert_eq!(
-        store.load().unwrap().unwrap().account.unwrap().access_token,
+        store
+            .load()
+            .unwrap()
+            .unwrap()
+            .active()
+            .unwrap()
+            .access_token,
         "old-access"
     );
     validate.assert();
@@ -305,14 +317,12 @@ fn invalid_input_and_wrong_account_never_send_requests() {
         auth.verify_otp("9812345678", "123456"),
         Err(Error::NoPendingLogin)
     ));
-    store
-        .save(&Session {
-            device_id: "device".into(),
-            other_accounts: Vec::new(),
-            pending_msisdn: Some("9823456789".into()),
-            account: None,
-        })
-        .unwrap();
+    let mut session = Session::default();
+    session.pending = Some(ncell_cli::session::PendingLogin {
+        msisdn: "9823456789".into(),
+        device_id: "device".into(),
+    });
+    store.save(&session).unwrap();
     assert!(matches!(
         auth.verify_otp("9812345678", "123456"),
         Err(Error::NoPendingLogin)
@@ -350,21 +360,17 @@ fn malformed_response_and_connection_failure_are_safe_errors() {
 fn refresh_rotates_tokens_and_keeps_device_identity() {
     let mut server = Server::new();
     let store = MemoryStore::default();
-    store
-        .save(&Session {
-            device_id: "same-device".into(),
-            other_accounts: Vec::new(),
-            pending_msisdn: None,
-            account: Some(ncell_cli::session::Account {
-                msisdn: "9812345678".into(),
-                access_token: "old-access".into(),
-                refresh_token: Some("old-refresh".into()),
-                authenticated_at: chrono::Utc::now(),
-                token_saved_at: None,
-                access_token_expires_at: None,
-            }),
-        })
-        .unwrap();
+    let mut session = Session::default();
+    session.set_account(ncell_cli::session::Account {
+        msisdn: "9812345678".into(),
+        device_id: "same-device".into(),
+        access_token: "old-access".into(),
+        refresh_token: Some("old-refresh".into()),
+        authenticated_at: chrono::Utc::now(),
+        token_saved_at: None,
+        access_token_expires_at: None,
+    });
+    store.save(&session).unwrap();
     let request = server.mock("POST", "/v1.0/user/refresh/token")
         .match_body(Matcher::PartialJson(json!({
             "refreshTokenRequest": { "refreshToken": "old-refresh" },
@@ -376,8 +382,8 @@ fn refresh_rotates_tokens_and_keeps_device_identity() {
         .refresh()
         .unwrap();
     let session = store.load().unwrap().unwrap();
-    assert_eq!(session.device_id, "same-device");
-    let account = session.account.unwrap();
+    assert_eq!(session.active().unwrap().device_id, "same-device");
+    let account = session.active().unwrap();
     assert_eq!(account.access_token, "new-access");
     assert_eq!(account.refresh_token.as_deref(), Some("new-refresh"));
     request.assert();
@@ -387,21 +393,17 @@ fn refresh_rotates_tokens_and_keeps_device_identity() {
 fn failed_refresh_preserves_saved_tokens() {
     let mut server = Server::new();
     let store = MemoryStore::default();
-    store
-        .save(&Session {
-            device_id: "same-device".into(),
-            other_accounts: Vec::new(),
-            pending_msisdn: None,
-            account: Some(ncell_cli::session::Account {
-                msisdn: "9812345678".into(),
-                access_token: "old-access".into(),
-                refresh_token: Some("old-refresh".into()),
-                authenticated_at: chrono::Utc::now(),
-                token_saved_at: None,
-                access_token_expires_at: None,
-            }),
-        })
-        .unwrap();
+    let mut session = Session::default();
+    session.set_account(ncell_cli::session::Account {
+        msisdn: "9812345678".into(),
+        device_id: "same-device".into(),
+        access_token: "old-access".into(),
+        refresh_token: Some("old-refresh".into()),
+        authenticated_at: chrono::Utc::now(),
+        token_saved_at: None,
+        access_token_expires_at: None,
+    });
+    store.save(&session).unwrap();
     let before = store.0.borrow().clone();
     let request = server
         .mock("POST", "/v1.0/user/refresh/token")
@@ -420,19 +422,15 @@ fn failed_refresh_preserves_saved_tokens() {
 
 fn add_other_account(store: &MemoryStore) {
     let mut session = store.load().unwrap().unwrap();
-    session
-        .other_accounts
-        .push(ncell_cli::session::SavedAccount {
-            device_id: "other-device".into(),
-            account: ncell_cli::session::Account {
-                msisdn: "9822222222".into(),
-                access_token: "other-access".into(),
-                refresh_token: Some("other-refresh".into()),
-                authenticated_at: chrono::Utc::now(),
-                token_saved_at: None,
-                access_token_expires_at: None,
-            },
-        });
+    session.add_account(ncell_cli::session::Account {
+        msisdn: "9822222222".into(),
+        device_id: "other-device".into(),
+        access_token: "other-access".into(),
+        refresh_token: Some("other-refresh".into()),
+        authenticated_at: chrono::Utc::now(),
+        token_saved_at: None,
+        access_token_expires_at: None,
+    });
     store.save(&session).unwrap();
 }
 
@@ -444,15 +442,18 @@ fn refresh_only_rotates_active_account_and_preserves_other_identity() {
     let refresh = server.mock("POST", "/v1.0/user/refresh/token")
         .match_body(Matcher::PartialJson(json!({"refreshTokenRequest":{"refreshToken":"old-refresh"},"requestHeader":{"msisdn":"9812345678","deviceId":"same-device"}})))
         .with_body(json!({"responseHeader":{"responseCode":"200"},"userAuthResponse":{"accessToken":"rotated-access","refreshToken":"rotated-refresh","expiresIn":"2026-10-13T01:00:00"}}).to_string()).expect(1).create();
+    AuthService::new(Client::with_base_url(&server.url()).unwrap(), store.clone());
     let auth = AuthService::new(Client::with_base_url(&server.url()).unwrap(), store.clone());
     auth.refresh().unwrap();
     let mut session = store.load().unwrap().unwrap();
+    assert_eq!(session.active().unwrap().access_token, "rotated-access");
     assert_eq!(
-        session.account.as_ref().unwrap().access_token,
-        "rotated-access"
-    );
-    assert_eq!(
-        session.other_accounts[0].account.access_token,
+        session
+            .accounts
+            .iter()
+            .find(|a| a.msisdn == "9822222222")
+            .unwrap()
+            .access_token,
         "other-access"
     );
     session.switch("9822222222").unwrap();
@@ -466,7 +467,7 @@ fn refresh_only_rotates_active_account_and_preserves_other_identity() {
     let mut session = store.load().unwrap().unwrap();
     session.switch("9812345678").unwrap();
     assert_eq!(
-        session.account.unwrap().refresh_token.as_deref(),
+        session.active().unwrap().refresh_token.as_deref(),
         Some("rotated-refresh")
     );
     refresh.assert();
@@ -520,11 +521,11 @@ fn adding_login_keeps_old_account_and_failed_verification_preserves_it() {
         .with_body(r#"{"responseHeader":{"responseCode":"200"},"validateOTPResponse":{"accessToken":"third-access","refreshToken":"third-refresh"}}"#).expect(1).create();
     auth.verify_otp("9833333333", "123456").unwrap();
     let mut session = store.load().unwrap().unwrap();
-    assert_eq!(session.account.as_ref().unwrap().msisdn, "9833333333");
-    assert_eq!(session.other_accounts.len(), 2);
-    assert!(session.pending_msisdn.is_none());
+    assert_eq!(session.active().unwrap().msisdn, "9833333333");
+    assert_eq!(session.accounts.len(), 3);
+    assert!(session.pending.is_none());
     session.switch("9812345678").unwrap();
-    assert_eq!(session.account.unwrap().access_token, "old-access");
+    assert_eq!(session.active().unwrap().access_token, "old-access");
     generate.assert();
     valid.assert();
 }
@@ -535,7 +536,10 @@ fn add_verification_preserves_active_and_resumes_after_wrong_otp() {
     let store = saved_account();
     add_other_account(&store);
     let mut session = store.load().unwrap().unwrap();
-    session.pending_msisdn = Some("9833333333".into());
+    session.pending = Some(ncell_cli::session::PendingLogin {
+        msisdn: "9833333333".into(),
+        device_id: "add-device".into(),
+    });
     store.save(&session).unwrap();
     let auth = AuthService::new(Client::with_base_url(&server.url()).unwrap(), store.clone());
     let before = store.0.borrow().clone();
@@ -552,8 +556,8 @@ fn add_verification_preserves_active_and_resumes_after_wrong_otp() {
     let valid=server.mock("POST","/v1.0/user/otp/validate").with_body(r#"{"responseHeader":{"responseCode":"200"},"validateOTPResponse":{"accessToken":"new-access","refreshToken":"new-refresh"}}"#).expect(1).create();
     auth.verify_account("9833333333", "654321", false).unwrap();
     let session = store.load().unwrap().unwrap();
-    assert_eq!(session.account.unwrap().msisdn, "9812345678");
-    assert_eq!(session.other_accounts.len(), 2);
-    assert!(session.pending_msisdn.is_none());
+    assert_eq!(session.active().unwrap().msisdn, "9812345678");
+    assert_eq!(session.accounts.len(), 3);
+    assert!(session.pending.is_none());
     valid.assert();
 }
