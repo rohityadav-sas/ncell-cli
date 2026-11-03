@@ -166,6 +166,7 @@ where
 
     let zip_bytes = client
         .get(download_url)
+        .timeout(std::time::Duration::from_secs(300))
         .send()
         .and_then(|r| r.error_for_status())
         .map_err(|e| Error::Update(format!("Failed to download {asset_name}: {e}")))?

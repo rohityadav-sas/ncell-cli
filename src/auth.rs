@@ -4,15 +4,19 @@ use crate::{
     session::{Account, SessionStore},
 };
 
-pub fn normalize_number(input: &str) -> Result<&str> {
-    let number = input.strip_prefix("+977").unwrap_or(input);
+pub fn normalize_number(input: &str) -> Result<String> {
+    let clean: String = input
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '-')
+        .collect();
+    let number = clean.strip_prefix("+977").unwrap_or(&clean);
     if number.len() != 10 || !number.starts_with('9') || !number.bytes().all(|b| b.is_ascii_digit())
     {
         return Err(Error::InvalidInput(
             "Use a 10-digit Nepal mobile number, optionally prefixed with +977",
         ));
     }
-    Ok(number)
+    Ok(number.to_string())
 }
 
 pub struct AuthService<S> {
@@ -55,7 +59,7 @@ impl<S: SessionStore> AuthService<S> {
 
     pub fn request_otp(&self, number: &str) -> Result<()> {
         let number = normalize_number(number)?;
-        let mut session = self.store.load()?.unwrap_or_default();
+        let session = self.store.load()?.unwrap_or_default();
         let device_id = session
             .accounts
             .iter()
@@ -70,12 +74,14 @@ impl<S: SessionStore> AuthService<S> {
             })
             .unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string()[..16].into());
 
-        session.pending = Some(crate::session::PendingLogin {
-            msisdn: number.into(),
-            device_id: device_id.clone(),
-        });
-        self.store.save(&session)?;
-        self.api.generate_otp(number, &device_id)
+        self.store.update(|session| {
+            session.pending = Some(crate::session::PendingLogin {
+                msisdn: number.clone(),
+                device_id: device_id.clone(),
+            });
+            Ok(())
+        })?;
+        self.api.generate_otp(&number, &device_id)
     }
 
     pub fn verify_otp(&self, number: &str, otp: &str) -> Result<()> {
@@ -87,52 +93,76 @@ impl<S: SessionStore> AuthService<S> {
         if !(4..=8).contains(&otp.len()) || !otp.bytes().all(|b| b.is_ascii_digit()) {
             return Err(Error::InvalidInput("OTP must contain 4 to 8 digits"));
         }
-        let mut session = self.store.load()?.ok_or(Error::NoPendingLogin)?;
-        let pending = session.pending.take().ok_or(Error::NoPendingLogin)?;
+        let session = self.store.load()?.ok_or(Error::NoPendingLogin)?;
+        let pending = session.pending.as_ref().ok_or(Error::NoPendingLogin)?;
         if pending.msisdn != number || pending.device_id.is_empty() {
             return Err(Error::NoPendingLogin);
         }
-        let tokens = self.api.validate_otp(number, &pending.device_id, otp)?;
+        let device_id = pending.device_id.clone();
+        let tokens = self.api.validate_otp(&number, &device_id, otp)?;
         let now = chrono::Utc::now();
         let account = Account {
-            msisdn: number.into(),
-            device_id: pending.device_id,
+            msisdn: number.clone(),
+            device_id,
             access_token: tokens.access_token,
             refresh_token: tokens.refresh_token,
             authenticated_at: now,
             token_saved_at: Some(now),
             access_token_expires_at: token_expiry(tokens.expires_in),
         };
-        session.save_account(account, activate);
-        self.store.save(&session)
+        self.store.update(|session| {
+            session.pending = None;
+            session.save_account(account, activate);
+            Ok(())
+        })
     }
 
     pub fn refresh(&self) -> Result<()> {
-        let mut session = self.store.load()?.ok_or(Error::NotLoggedIn)?;
-        let account = session.active_mut().ok_or(Error::NotLoggedIn)?;
-        let refresh_token = account
+        let session = self.store.load()?.ok_or(Error::NotLoggedIn)?;
+        let account = session.active().ok_or(Error::NotLoggedIn)?;
+        let old_refresh = account
             .refresh_token
             .as_deref()
             .filter(|token| !token.is_empty())
-            .ok_or(Error::InvalidInput("No refresh token saved. Log in again"))?;
-        let tokens = match self
-            .api
-            .refresh(&account.msisdn, &account.device_id, refresh_token)
-        {
+            .ok_or(Error::InvalidInput("No refresh token saved. Log in again"))?
+            .to_owned();
+        let msisdn = account.msisdn.clone();
+        let device_id = account.device_id.clone();
+
+        let tokens = match self.api.refresh(&msisdn, &device_id, &old_refresh) {
             Err(Error::Api {
                 status: 401, code, ..
             }) if code == "LGN2004" => {
+                let already_rotated = self
+                    .store
+                    .load()?
+                    .and_then(|s| s.accounts.into_iter().find(|a| a.msisdn == msisdn))
+                    .is_some_and(|a| a.refresh_token.as_deref() != Some(old_refresh.as_str()));
+                if already_rotated {
+                    return Ok(());
+                }
                 return Err(Error::InvalidInput(
                     "Session expired. Run `ncell login` to sign in again.",
                 ));
             }
             res => res?,
         };
-        account.token_saved_at = Some(chrono::Utc::now());
-        account.access_token_expires_at = token_expiry(tokens.expires_in);
-        account.access_token = tokens.access_token;
-        account.refresh_token = tokens.refresh_token.or(account.refresh_token.take());
-        self.store.save(&session)
+
+        let now = chrono::Utc::now();
+        let expiry = token_expiry(tokens.expires_in);
+
+        self.store.update(|session| {
+            if let Some(acc) = session.accounts.iter_mut().find(|a| a.msisdn == msisdn)
+                && (acc.refresh_token.as_deref() == Some(&old_refresh)
+                    || acc.refresh_token.is_none())
+            {
+                acc.token_saved_at = Some(now);
+                acc.access_token_expires_at = expiry;
+                acc.access_token = tokens.access_token;
+                acc.refresh_token = tokens.refresh_token.or(acc.refresh_token.take());
+            }
+            Ok(())
+        })
     }
 }
 

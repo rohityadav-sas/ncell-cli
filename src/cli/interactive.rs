@@ -637,8 +637,12 @@ fn draw_output(transcript: &Transcript) -> io::Result<()> {
 /// Run one command as a child process and stream its output into the transcript.
 /// Returns whether the child exited successfully, so the caller only discards
 /// cached data when state may actually have changed.
-fn run_captured(words: &[String], transcript: &mut Transcript) -> io::Result<bool> {
-    let mut command = std::process::Command::new(std::env::current_exe()?);
+fn run_captured(
+    exe: &std::path::Path,
+    words: &[String],
+    transcript: &mut Transcript,
+) -> io::Result<bool> {
+    let mut command = std::process::Command::new(exe);
     command
         .args(words)
         .stdin(Stdio::inherit())
@@ -1449,6 +1453,7 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
         ));
     }
     let mut guard = TerminalGuard::enter().map_err(fail)?;
+    let current_exe = std::env::current_exe().map_err(fail)?;
     // Raw mode is off while a command runs, so Ctrl+C is a real signal. Swallow it here;
     // the child shares the console and still dies from it, which ends the capture loop.
     let _ = ctrlc::set_handler(|| {});
@@ -1608,13 +1613,21 @@ pub(super) fn run(runtime: &mut Runtime, json: bool) -> Result<()> {
                 );
                 guard.pause().map_err(fail)?;
                 let scripted = matches!(&args.command, Some(Command::Script { .. }));
-                let succeeded = match run_captured(&words, &mut transcript) {
+                let is_update = words
+                    .iter()
+                    .any(|w| w == "update" || w == "-U" || w == "--update");
+                let succeeded = match run_captured(&current_exe, &words, &mut transcript) {
                     Err(error) => {
                         transcript.push_str(&format!("Error: {error}\n"));
                         false
                     }
                     Ok(succeeded) => succeeded,
                 };
+                if succeeded && is_update {
+                    transcript.push_str(
+                        "Updated ncell-cli. Please exit and restart interactive mode to use the new version.\n",
+                    );
+                }
                 if invalidate && (scripted || succeeded) {
                     categories.invalidate();
                     packs.invalidate();

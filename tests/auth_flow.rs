@@ -153,6 +153,12 @@ impl SessionStore for MemoryStore {
         *self.0.borrow_mut() = Some(serde_json::to_string(session).unwrap());
         Ok(())
     }
+    fn update<T>(&self, f: impl FnOnce(&mut Session) -> Result<T>) -> Result<T> {
+        let mut session = self.load()?.unwrap_or_default();
+        let res = f(&mut session)?;
+        self.save(&session)?;
+        Ok(res)
+    }
     fn clear(&self) -> Result<()> {
         *self.0.borrow_mut() = None;
         Ok(())

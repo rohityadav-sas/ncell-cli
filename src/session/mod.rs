@@ -41,7 +41,7 @@ impl Account {
 
     pub fn is_expired(&self) -> bool {
         self.expires_at()
-            .is_some_and(|exp| exp <= chrono::Utc::now())
+            .is_some_and(|exp| exp <= chrono::Utc::now() + chrono::Duration::seconds(30))
     }
 }
 

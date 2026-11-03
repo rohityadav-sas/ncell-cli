@@ -568,12 +568,15 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                         ids
                     } else {
                         // `validate_args` already rejected a lone "all" mixed with IDs.
-                        ids.iter()
-                            .filter_map(|id| match id {
-                                TaskId::Id(n) => Some(*n),
-                                TaskId::All => None,
-                            })
-                            .collect()
+                        let mut unique = Vec::new();
+                        for id in &ids {
+                            if let TaskId::Id(n) = id
+                                && !unique.contains(n)
+                            {
+                                unique.push(*n);
+                            }
+                        }
+                        unique
                     }
                 }
             };
@@ -696,7 +699,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
         }
         Command::Account { action } => {
             let store = FileStore::new()?;
-            let mut session = store.load()?.unwrap_or_default();
+            let session = store.load()?.unwrap_or_default();
             match action {
                 AccountCommand::Add { number, verify } => {
                     drop(store);
@@ -704,11 +707,13 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                 }
                 AccountCommand::Remove { number } => {
                     let number = normalize_number(&number)?;
-                    session.remove(number)?;
-                    store.save(&session)?;
+                    let active = store.update(|s| {
+                        s.remove(&number)?;
+                        Ok(s.active.clone())
+                    })?;
                     output(
                         args.json,
-                        json!({"removed_account":number,"active_account":session.active}),
+                        json!({"removed_account":number,"active_account":active}),
                         format!("Removed {number}."),
                     );
                 }
@@ -740,8 +745,7 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
                 }
                 AccountCommand::Switch { number } => {
                     let number = normalize_number(&number)?;
-                    session.switch(number)?;
-                    store.save(&session)?;
+                    store.update(|s| s.switch(&number))?;
                     output(
                         args.json,
                         json!({"active_account":number}),
@@ -778,19 +782,13 @@ fn run_with(args: Args, runtime: &mut Runtime) -> Result<()> {
         }
         Command::Logout => {
             let store = FileStore::new()?;
-            let mut session = match store.load() {
-                Err(Error::InvalidSession) => {
-                    store.clear()?;
-                    None
-                }
-                session => session?,
-            }
-            .unwrap_or_default();
-            session.logout();
-            store.save(&session)?;
+            let active = store.update(|session| {
+                session.logout();
+                Ok(session.active.clone())
+            })?;
             output(
                 args.json,
-                json!({"account_removed": true, "active_account": session.active}),
+                json!({"account_removed": true, "active_account": active}),
                 "Active account removed. Run ncell account list to see remaining accounts.",
             );
         }
@@ -973,6 +971,23 @@ fn plan_price(plan: &Value) -> String {
     format!("Rs. {amount}")
 }
 
+pub(crate) fn prompt_line(prompt: &str) -> Result<String> {
+    eprint!("{prompt}");
+    io::stderr().flush().map_err(|_| Error::Prompt)?;
+    let mut line = String::new();
+    if io::stdin()
+        .read_line(&mut line)
+        .map_err(|_| Error::Prompt)?
+        == 0
+    {
+        return Err(Error::Prompt);
+    }
+    if std::env::var_os("NCELL_CAPTURED").is_some() {
+        eprintln!();
+    }
+    Ok(line)
+}
+
 /// Spending money needs an explicit yes: a flag for scripts, or a typed
 /// confirmation when a person is at the keyboard. Piped input can never confirm.
 fn confirm_subscribe(name: &str, price: &str, yes: bool) -> Result<()> {
@@ -984,12 +999,7 @@ fn confirm_subscribe(name: &str, price: &str, yes: bool) -> Result<()> {
             "Refusing to subscribe without --yes in non-interactive mode",
         ));
     }
-    eprint!("Subscribe to {name} for {price}? [y/N] ");
-    io::stderr().flush().map_err(|_| Error::Prompt)?;
-    let mut answer = String::new();
-    io::stdin()
-        .read_line(&mut answer)
-        .map_err(|_| Error::Prompt)?;
+    let answer = prompt_line(&format!("Subscribe to {name} for {price}? [y/N] "))?;
     if matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
         Ok(())
     } else {
@@ -1006,18 +1016,7 @@ fn login(client: Client, number: &str, verify: bool, activate: bool, json: bool)
             "OTP requested. Check your SMS. To resume later: ncell {command} {number} --verify"
         );
     }
-    eprint!("Enter OTP: ");
-    io::stderr().flush().map_err(|_| Error::Prompt)?;
-    let mut otp = String::new();
-    if io::stdin().read_line(&mut otp).map_err(|_| Error::Prompt)? == 0 {
-        return Err(Error::Prompt);
-    }
-    // Under interactive capture the typed line never reaches the transcript
-    // (it goes straight to the console), so end the prompt row here. Plain
-    // one-shot runs keep their exact output.
-    if std::env::var_os("NCELL_CAPTURED").is_some() {
-        eprintln!();
-    }
+    let otp = prompt_line("Enter OTP: ")?;
     auth.verify_account(number, otp.trim(), activate)?;
     output(
         json,
@@ -1472,6 +1471,9 @@ fn manual_math_answer(
         let mut answer = String::new();
         if input.read_line(&mut answer).map_err(|_| failed())? == 0 {
             return Err(failed());
+        }
+        if std::env::var_os("NCELL_CAPTURED").is_some() {
+            let _ = writeln!(prompt);
         }
         if let Ok(answer) = answer.trim().parse::<f64>()
             && let Some(option) = options

@@ -9,6 +9,7 @@ use std::{
 pub trait SessionStore {
     fn load(&self) -> Result<Option<Session>>;
     fn save(&self, session: &Session) -> Result<()>;
+    fn update<T>(&self, f: impl FnOnce(&mut Session) -> Result<T>) -> Result<T>;
     fn clear(&self) -> Result<()>;
 }
 
@@ -74,21 +75,8 @@ impl FileStore {
             Err(fs::TryLockError::Error(_)) => Err(Error::Storage),
         }
     }
-}
 
-impl SessionStore for FileStore {
-    fn load(&self) -> Result<Option<Session>> {
-        match fs::read(&self.path) {
-            Ok(bytes) => serde_json::from_slice(&bytes)
-                .map(Some)
-                .map_err(|_| Error::InvalidSession),
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
-            Err(_) => Err(Error::Storage),
-        }
-    }
-
-    fn save(&self, session: &Session) -> Result<()> {
-        let _lock = self.acquire_lock()?;
+    fn write_to_file(&self, session: &Session) -> Result<()> {
         let bytes = serde_json::to_vec_pretty(session).map_err(|_| Error::InvalidSession)?;
         let tmp = self.path.with_extension("json.tmp");
         let _ = fs::remove_file(&tmp); // stale leftover from a crash
@@ -107,6 +95,31 @@ impl SessionStore for FileStore {
             let _ = fs::remove_file(&tmp);
             Error::Storage
         })
+    }
+}
+
+impl SessionStore for FileStore {
+    fn load(&self) -> Result<Option<Session>> {
+        match fs::read(&self.path) {
+            Ok(bytes) => serde_json::from_slice(&bytes)
+                .map(Some)
+                .map_err(|_| Error::InvalidSession),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(_) => Err(Error::Storage),
+        }
+    }
+
+    fn save(&self, session: &Session) -> Result<()> {
+        let _lock = self.acquire_lock()?;
+        self.write_to_file(session)
+    }
+
+    fn update<T>(&self, f: impl FnOnce(&mut Session) -> Result<T>) -> Result<T> {
+        let _lock = self.acquire_lock()?;
+        let mut session = self.load()?.unwrap_or_default();
+        let res = f(&mut session)?;
+        self.write_to_file(&session)?;
+        Ok(res)
     }
 
     fn clear(&self) -> Result<()> {

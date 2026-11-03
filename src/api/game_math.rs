@@ -115,9 +115,8 @@ fn solve(question: &Value) -> Result<String> {
         .ok_or(Error::InvalidResponse)?
         .iter()
         .find(|option| {
-            option
-                .as_f64()
-                .is_some_and(|value| (value - answer).abs() < 1e-8)
+            let opt_f64 = option.as_f64().or_else(|| option.as_str()?.parse().ok());
+            opt_f64.is_some_and(|value| (value - answer).abs() < 1e-4)
         })
         .map(Value::to_string)
         .ok_or(Error::InvalidInput(
