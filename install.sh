@@ -3,7 +3,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.sh | sh
 #
 # Optional environment variables:
-#   NCELL_VERSION      release tag to install (default: latest), e.g. v0.5.3
+#   NCELL_VERSION      release tag to install (default: latest), e.g. v0.5.4
 #   NCELL_INSTALL_DIR  install directory (default: $HOME/.local/bin)
 set -eu
 
@@ -74,7 +74,7 @@ else
   die "unzip is required (install it with your package manager, e.g. 'sudo apt install unzip')"
 fi
 
-# The release zip keeps the binary at its root next to LICENSE and docs/.
+# The release zip keeps the binary at its root next to LICENSE and README.md.
 found="$tmp/out/$BIN"
 [ -f "$found" ] || die "'$BIN' was not found inside the archive"
 

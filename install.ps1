@@ -2,7 +2,7 @@
 #   irm https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.ps1 | iex
 #
 # Optional environment variables:
-#   NCELL_VERSION      release tag to install (default: latest), e.g. v0.5.3
+#   NCELL_VERSION      release tag to install (default: latest), e.g. v0.5.4
 #   NCELL_INSTALL_DIR  install directory (default: %LOCALAPPDATA%\Programs\ncell-cli)
 
 $ErrorActionPreference = 'Stop'
@@ -40,7 +40,7 @@ try {
     Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing
     Expand-Archive -Path $zip -DestinationPath (Join-Path $tmp 'out') -Force
 
-    # The release zip keeps ncell.exe at its root next to LICENSE and docs\.
+    # The release zip keeps ncell.exe at its root next to LICENSE and README.md.
     $exe = Join-Path $tmp 'out\ncell.exe'
     if (-not (Test-Path -LiteralPath $exe)) { throw "ncell.exe was not found inside the archive" }
 

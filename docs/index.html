@@ -783,10 +783,11 @@
 
             <h3>Subscribe</h3>
             <p>
-                Use the plan ID and its category. Paid packs deducts money
+                Use the plan ID and its category. Paid packs deduct money
                 from your balance, so the command shows the name and price
                 and asks for confirmation. Use <code>--yes</code> to skip it
-                (usually, used in scripts).
+                (useful in scripts), or <code>--dry-run</code> to inspect what
+                would be purchased without spending anything.
             </p>
             <pre data-lang="Shell"><code>ncell plans subscribe 984 --category 50</code></pre>
 
@@ -1124,7 +1125,8 @@ ncell game ranks
 
                                     <td>
                                         <code>&lt;plan-id&gt; [--category
-                                                &lt;id&gt;]</code>
+                                                &lt;id&gt;] [--yes]
+                                                [--dry-run]</code>
                                     </td>
                                 </tr>
                             </tbody>
@@ -1335,6 +1337,14 @@ ncell game ranks
 
                                     <td>
                                         Check for updates and install the latest release
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <td><code>docs</code></td>
+
+                                    <td>
+                                        Open online documentation in your default browser
                                     </td>
                                 </tr>
 

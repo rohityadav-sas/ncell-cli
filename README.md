@@ -123,6 +123,6 @@ Download the ZIP archive for your platform from [Releases](<https://github.com/r
 chmod +x ncell
 ./ncell --help
 ```
-Session credentials are saved locally under `~/.config/ncell-cli/session.json` (`%LOCALAPPDATA%\ncell-cli\session.json` on Windows) with user-only permissions (0600).
+Session credentials are saved locally under `~/.config/ncell-cli/session.json` on Linux (`~/Library/Application Support/ncell-cli/session.json` on macOS, `%LOCALAPPDATA%\ncell-cli\session.json` on Windows) with user-only permissions (0600).
 
 3. (Optional) Add the directory containing the executable to your `PATH` to run `ncell` from anywhere.
