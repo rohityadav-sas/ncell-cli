@@ -58,11 +58,11 @@ Install a specific version or in a specific folder:
 
 **Linux / macOS**
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.sh | NCELL_VERSION=v0.5.5 sh
+curl -fsSL https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.sh | NCELL_VERSION=v0.5.6 sh
 ```
 **Windows**
 ```powershell
-$env:NCELL_VERSION = 'v0.5.5'; irm https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.ps1 | iex
+$env:NCELL_VERSION = 'v0.5.6'; irm https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.ps1 | iex
 ```
 
 `NCELL_INSTALL_DIR` changes the install folder in both scripts. On Linux and macOS it must be an absolute path; on Windows, relative paths are converted to full paths before installation.
