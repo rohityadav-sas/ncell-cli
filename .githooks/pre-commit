@@ -1,0 +1,8 @@
+#!/bin/sh
+# Automatically synchronize version across docs, scripts, and readme when Cargo.toml is staged.
+set -eu
+
+if git diff --cached --name-only | grep -q '^Cargo\.toml$'; then
+  python3 scripts/sync_version.py
+  git add README.md docs/index.html install.sh install.ps1 Cargo.lock docs/version.json 2>/dev/null || true
+fi

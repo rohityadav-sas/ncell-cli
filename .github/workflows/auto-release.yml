@@ -30,6 +30,11 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 scripts/sync_version.py
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -am "chore: sync version $tag across repository [skip ci]"
+            git push origin main
+          fi
           git tag "$tag"
           git push origin "$tag"
           gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "$tag" --generate-notes
