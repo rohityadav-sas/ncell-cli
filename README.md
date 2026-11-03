@@ -49,21 +49,18 @@ curl -fsSL https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/insta
 irm https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.ps1 | iex
 ```
 
-The installer downloads the right prebuilt binary for your OS and CPU from the [latest release](https://github.com/rohityadav-sas/ncell-cli/releases/latest) and needs no admin rights or sudo.
+| OS  | Installs to |
+| --- | --- |
+| Linux / macOS | `~/.local/bin/ncell` | 
+| Windows | `%LOCALAPPDATA%\Programs\ncell-cli\ncell.exe` |
 
-| OS | Installs to | PATH |
-| --- | --- | --- |
-| Linux / macOS | `~/.local/bin/ncell` | Prints the line to add if the folder is missing from your `PATH` |
-| Windows | `%LOCALAPPDATA%\Programs\ncell-cli\ncell.exe` | Added to your user `PATH` automatically |
+Install a specific version or in a specific folder:
 
-Linux and macOS need `curl` or `wget`, plus `unzip`.
-
-Install a specific version or folder with environment variables:
-
+**Linux / macOS**
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.sh | NCELL_VERSION=v0.5.5 sh
 ```
-
+**Windows**
 ```powershell
 $env:NCELL_VERSION = 'v0.5.5'; irm https://raw.githubusercontent.com/rohityadav-sas/ncell-cli/main/install.ps1 | iex
 ```
@@ -80,49 +77,4 @@ ncell -U
 
 You can also re-run the quick install command above to update.
 
-To uninstall, delete the `ncell` binary from the install folder. On Windows, also remove that folder from your user `PATH`.
-
-**From source**
-
-Install [rustup](https://rustup.rs/) and Git, then clone the repository and install the executable on your `PATH`:
-
-```sh
-git clone https://github.com/rohityadav-sas/ncell-cli.git
-cd ncell-cli
-cargo install --path . --locked
-ncell --help
-```
-
-## Prebuilt binaries
-
-Download the ZIP archive for your platform from [Releases](<https://github.com/rohityadav-sas/ncell-cli/releases/latest>).
-
-| Platform | Architecture | Archive suffix |
-| --- | --- | --- |
-| Windows | x64 | `windows-x86_64.zip` |
-| Windows | ARM64 | `windows-arm64.zip` |
-| Linux | x64 | `linux-x86_64.zip` |
-| Linux | ARM64 | `linux-arm64.zip` |
-| macOS | Intel | `macos-x86_64.zip` |
-| macOS | Apple Silicon | `macos-arm64.zip` |
-
-### Running the binary
-
-1. Extract the downloaded ZIP archive.
-2. Run the executable using the appropriate command:
-
-**Windows (PowerShell):**
-
-```
-.\ncell.exe --help
-```
-
-**Linux and macOS:**
-
-```
-chmod +x ncell
-./ncell --help
-```
-Session credentials are saved locally under `~/.config/ncell-cli/session.json` on Linux (`~/Library/Application Support/ncell-cli/session.json` on macOS, `%LOCALAPPDATA%\ncell-cli\session.json` on Windows) with user-only permissions (0600).
-
-3. (Optional) Add the directory containing the executable to your `PATH` to run `ncell` from anywhere.
+To uninstall, simply delete the `ncell` binary from the install folder.
